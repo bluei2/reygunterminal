@@ -1,0 +1,44 @@
+REYGUN SUPERCHART v2.6.5 - PAANO MAG-INSTALL / MAG-UPDATE   (build 2026-10-01.20)
+
+BAGONG PC (unang beses)
+  1. I-install ang Python 3.11+ (python.org) - i-check ang "Add python.exe to PATH".
+  2. I-extract ang zip, hal. sa  C:\REYGUN\reygun_terminal
+  3. I-double-click ang  setup.bat  (isang beses lang: mag-i-install ng kailangan).
+  4. Buksan ang MT5 (LiteFinance) at mag-login.
+  5. I-double-click ang  run_superchart_live.bat
+       - run_superchart_live.bat     = live MT5 + trading (kailangan pa rin ng ARM + confirm)
+       - run_superchart_paper.bat    = live chart, PERO simulated ang trades (pang-practice)
+       - run_superchart_readonly.bat = chart + analyser LANG (walang trading, walang Trading menu)
+       - run_superchart_demo.bat     = synthetic data, walang MT5
+
+MAG-UPDATE (may luma nang folder)
+  1. I-CLOSE ang terminal (ang itim na window), hindi lang ang browser.
+  2. I-extract ang bagong zip.
+  3. Kopyahin ang LAMAN ng bagong reygun_terminal folder -> i-paste sa lumang folder ->
+     "Replace the files in the destination".
+     Hindi mabubura ang settings mo (accounts.json, journal, telegram, risk, strategy settings):
+     wala ang mga iyon sa zip.
+  4. Buksan ulit gamit ang run_superchart_live.bat.
+
+PAANO MALALAMAN NA BAGO ANG TUMATAKBO
+  - "v2.6.5" sa itaas ng sidebar (sa ilalim ng logo) (at sa title ng window), may "Trading" menu (⚡), "%" ang score (hindi "2/9").
+  - WALANG pulang banner na "Luma pa ang tumatakbong terminal".
+  - Kung "READ-ONLY" ang nasa itaas ng sidebar (sa ilalim ng logo): run_superchart_readonly.bat ang nabuksan -> gamitin ang
+    run_superchart_live.bat (o paper) para lumabas ang Trading, Accounts, Journal, Backtest, atbp.
+
+PAGKATAPOS BUKSAN
+  - Buksan muna at mag-login ang LAHAT ng MT5 (master + followers), naka-ON ang Algo Trading.
+  - Accounts -> "🔍 Hanapin ang bukas na MT5" -> "Gamitin bilang MASTER" (LiteFinance) at "+ FOLLOWER"
+    sa iba -> i-check ang lot / symbol -> Save accounts -> "🔌 Test connections".
+  - Trading -> STRATEGIES: i-check ang gusto mong strategy -> Save strategies.
+  - LAYERS (sa chart): i-CHART ang Strategy · TREND / PULLBACK / CONSOLIDATION para makita sa chart.
+    Ang STRATEGIES card sa kanan ng Market Overview ay laging nakikita (x/3, BOS, news countdown).
+  - Sa itaas ng chart: ⚡ AUTO -> confirm (wala nang hiwalay na ARM). Laging OFF ang AUTO pagbukas ng app.
+  - I-click ang MANUAL sa tabi ng strategy (sa kanan) para i-AUTO ang strategy na iyon.
+
+KUNG NAG-DISCONNECT / NAG-CRASH
+  - Hayaan lang na bukas ang itim na window: kusang magre-restart ang SuperChart pagkalipas ng 5 segundo,
+    at ibabalik ang trading / AUTO / NEWS kung naka-ON bago tumigil (kung wala pang 10 minuto).
+  - Ang SL / TP ng bawat trade ay nasa MT5 (broker) mismo, kaya protektado pa rin habang nagre-restart.
+  - Para talagang ihinto: i-close ang ITIM na window (hindi lang ang browser window).
+  - Ang dahilan ng crash ay nasa crash_log.txt sa folder ng app. I-send kay Claude kung paulit-ulit.

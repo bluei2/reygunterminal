@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1120">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>REYGUN Companion</title>
+<style>
+  :root{
+    --bg:#0b1120; --card:#111a2e; --line:rgba(148,163,184,.14); --text:#e2e8f0; --muted:#94a3b8; --dim:#64748b;
+    --bull:#22c55e; --bear:#ef4444; --warn:#f59e0b; --info:#38bdf8; --violet:#c084fc;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:560px;margin:0 auto;padding:12px 14px calc(28px + env(safe-area-inset-bottom))}
+  header{position:sticky;top:0;z-index:5;background:linear-gradient(var(--bg) 82%,transparent);padding:10px 0 8px}
+  .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .brand{font-weight:800;letter-spacing:.12em;font-size:12px;color:var(--muted)}
+  .px{font:700 24px var(--mono)}
+  .sub{font-size:12px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chip{font-size:11px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .chip.g{color:var(--bull);border-color:rgba(34,197,94,.45)} .chip.r{color:var(--bear);border-color:rgba(239,68,68,.45)}
+  .chip.y{color:var(--warn);border-color:rgba(245,158,11,.45)} .chip.b{color:var(--info);border-color:rgba(56,189,248,.45)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0}
+  h2{margin:0 0 8px;font-size:11.5px;letter-spacing:.12em;color:var(--muted);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  h2 small{letter-spacing:0;font-weight:500;color:var(--dim);font-size:11.5px}
+  .score{display:flex;align-items:center;gap:14px}
+  .big{font:800 38px var(--mono);line-height:1}
+  .bar{position:relative;height:8px;border-radius:6px;background:rgba(148,163,184,.15);margin:10px 0 4px;overflow:visible}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px}
+  .bar em{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--text);opacity:.7}
+  .tfs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+  .tf{text-align:center;border:1px solid var(--line);border-radius:8px;padding:5px 0;font-size:12px}
+  .tf b{display:block;font-size:10.5px;color:var(--muted);font-weight:600}
+  .up{color:var(--bull)} .dn{color:var(--bear)} .nt{color:var(--muted)} .wa{color:var(--warn)}
+  .tabs{display:flex;gap:6px;margin-bottom:8px}
+  .tab{flex:1;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:6px 0;font:600 12px inherit}
+  .tab.on{color:var(--text);border-color:var(--info);background:rgba(56,189,248,.08)}
+  .ind{border-top:1px solid var(--line);padding:9px 0}
+  .ind:first-of-type{border-top:0}
+  .irow{display:flex;align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--dim)}
+  .dot.agree{background:var(--bull)} .dot.against{background:var(--bear)} .dot.mixed{background:var(--warn)}
+  .dot.neutral{background:#64748b} .dot.error{background:var(--bear);box-shadow:0 0 0 3px rgba(239,68,68,.25)} .dot.off{background:transparent;border:1.5px solid var(--dim)}
+  .iname{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cat{font-size:10.5px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px;flex:none}
+  .flags{display:flex;gap:4px;flex:none}
+  .flag{font:700 9.5px var(--mono);padding:2px 5px;border-radius:4px;background:rgba(148,163,184,.12);color:var(--dim)}
+  .flag.on{background:rgba(56,189,248,.16);color:var(--info)}
+  .imeta{margin:4px 0 0 18px;font-size:12px;color:var(--muted)}
+  .imeta .v{display:block;margin-top:2px}
+  .imeta code{font:11.5px var(--mono);color:var(--text)}
+  .lost div{display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--line);font-size:13px}
+  .lost div:first-child{border-top:0}
+  .lost b{font:600 13px var(--mono);color:var(--bear)}
+  .row{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+  .row:first-child{border-top:0}
+  .mono{font-family:var(--mono)}
+  .empty{color:var(--dim);font-size:13px}
+  .ai{font-size:13px;white-space:pre-wrap;max-height:220px;overflow:auto;color:#cbd5e1}
+  .ev{font-size:12px;color:var(--muted);padding:3px 0;border-top:1px solid var(--line)}
+  .ev:first-child{border-top:0}
+  .ev.warn{color:var(--warn)} .ev.error{color:var(--bear)}
+  .stale{display:none;margin-top:6px;font-size:12px;color:var(--warn)}
+  .stale.on{display:block}
+  footer{text-align:center;font-size:11.5px;color:var(--dim);margin-top:14px}
+  .strat{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top"><span class="brand">REYGUN · COMPANION</span><span class="sub" id="upd">--</span></div>
+    <div class="top"><span class="px" id="px">--</span><span class="sub" id="sym">--</span></div>
+    <div class="chips" id="safety"></div>
+    <div class="stale" id="stale">⚠ Hindi maabot ang terminal. Ipinapakita ang huling nakuha.</div>
+  </header>
+
+  <section class="card"><h2>SCORE <small id="verdict"></small></h2>
+    <div class="score"><div class="big" id="ov">--</div><div><div id="bias" class="sub">--</div><div id="pass" class="sub"></div></div></div>
+    <div class="bar"><i id="barI"></i><em id="barE"></em></div>
+    <div class="tfs" id="tfs"></div>
+  </section>
+
+  <section class="card"><h2>AKTIBONG INDICATORS <small id="icount"></small></h2>
+    <div class="tabs">
+      <button class="tab on" data-f="all">Lahat</button>
+      <button class="tab" data-f="score">SCORE</button>
+      <button class="tab" data-f="chart">CHART lang</button>
+    </div>
+    <div id="inds"></div>
+    <div id="strats"></div>
+  </section>
+
+  <section class="card"><h2>BAWAS SA SCORE <small>ilang puntos ang bawas ng bawat isa</small></h2><div class="lost" id="lost"></div></section>
+  <section class="card"><h2>OPEN TRADES <small id="acct"></small></h2><div id="trades"></div></section>
+  <section class="card"><h2>FORECASTS <small>virtual, hindi trade</small></h2><div id="fcs"></div></section>
+  <section class="card"><h2>AI ANALYST <small id="aimeta"></small></h2><div id="ai" class="ai"></div></section>
+  <section class="card"><h2>EVENTS</h2><div id="evs"></div></section>
+  <footer>Read-only · walang order o setting na nababago mula rito · <span id="mver"></span></footer>
+</div>
+<script>
+(function () {
+  const $ = (q) => document.querySelector(q);
+  const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fx = (v, d = 2) => (v == null || isNaN(v) ? "--" : Number(v).toFixed(d));
+  const tm = (t) => t ? new Date(t * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "";
+  const STATE = { agree: "sang-ayon", against: "kontra", neutral: "neutral", mixed: "halo", none: "walang boto", off: "chart lang", error: "error" };
+  const ARROW = { 1: "▲", "-1": "▼", 0: "•" };
+  const SETUP = { structure: "Structure", struct_poc: "Structure + POC", rev_ok: "Arrow R✓", rev_any: "Arrow R?", router: "Router", st_trend: "Strat TREND", st_pullback: "Strat PULLBACK", st_conso: "Strat GRID", vp_poc: "VP POC", vp_edge: "VP VAH/VAL" };
+  let D = null, filter = "all";
+  try { filter = localStorage.getItem("rg_m_filter") || "all"; } catch (e) { /* private mode */ }
+
+  function chip(txt, cls) { return `<span class="chip ${cls}">${esc(txt)}</span>`; }
+
+  function renderIndicators() {
+    const I = D.indicators || { items: [], strategies: [], counts: {} };
+    const c = I.counts || {};
+    $("#icount").textContent = `${c.score || 0} SCORE · ${c.chart || 0} CHART · ${c.total || 0} lahat`;
+    document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("on", b.dataset.f === filter));
+    const items = I.items.filter((x) => filter === "all" || (filter === "score" ? x.score : x.chart && !x.score));
+    $("#inds").innerHTML = items.length ? items.map((x) => {
+      const votes = x.votes.map((v) => `<span class="v"><span class="${v.state === "agree" ? "up" : v.state === "against" ? "dn" : "nt"}">${ARROW[v.dir] ?? "•"}${v.name !== x.name ? " " + esc(v.name) : ""}</span> <span class="nt">${esc(v.reason)}</span></span>`).join("");
+      return `<div class="ind"><div class="irow"><span class="dot ${x.state}" title="${esc(STATE[x.state] || x.state)}"></span>
+          <span class="iname">${esc(x.name)}</span><span class="cat">${esc(x.category)}</span>
+          <span class="flags"><span class="flag ${x.chart ? "on" : ""}">CHART</span><span class="flag ${x.score ? "on" : ""}">SCORE</span></span></div>
+        <div class="imeta">TF <code>${esc((x.tfs || []).join(" · ") || "-")}</code> · ${esc(STATE[x.state] || x.state)}${x.error ? ` · <span class="dn">${esc(x.error)}</span>` : ""}${votes}</div></div>`;
+    }).join("") : `<div class="empty">${filter === "all" ? "Walang naka-ON na indicator." : "Wala sa filter na ito."}</div>`;
+    $("#strats").innerHTML = I.strategies.length ? `<div class="sub" style="margin-top:10px">Strategies na ON (alerts)</div><div class="strat">${I.strategies.map((s) => chip(s.name, s.error ? "r" : "b")).join("")}</div>` : "";
+  }
+
+  function render() {
+    if (!D) return;
+    const p = D.price;
+    $("#px").textContent = p ? fx(p.bid) : "--";
+    $("#sym").textContent = `${D.symbol} · spread ${p ? fx(p.spread) : "--"} · ${D.live ? "LIVE" : esc(D.source || "demo")}`;
+    $("#upd").textContent = "update " + tm(D.t);
+    if (D.version) $("#mver").textContent = `REYGUN SuperChart v${D.version} · build ${D.build || "?"}`;
+    const s = D.safety || {};
+    $("#safety").innerHTML = [
+      s.master === false ? chip("MASTER OFF", "r") : chip("MASTER ON", "g"),
+      s.armed ? chip("ARMED", "y") : chip("DISARMED", ""),
+      s.paper ? chip("PAPER", "b") : chip("LIVE ACCOUNT", "r"),
+      s.auto ? chip("AUTO ON", "y") : chip("AUTO OFF", ""),
+      s.halted ? chip("HALTED", "r") : "",
+    ].join("");
+    const sc = D.score;
+    if (sc) {
+      const ov = sc.overall ?? 0, bull = sc.bias === "BULL", bear = sc.bias === "BEAR";
+      const col = sc.passed ? (bull ? "var(--bull)" : "var(--bear)") : ov >= sc.passing * 0.8 ? "var(--warn)" : "var(--info)";
+      $("#ov").textContent = Math.round(ov) + "%";
+      $("#ov").style.color = col;
+      $("#bias").innerHTML = `<span class="${bull ? "up" : bear ? "dn" : "nt"}"><b>${esc(sc.bias)}</b></span> · ${sc.trigger ? '<span class="up">trigger ✓</span>' : '<span class="wa">wala pang trigger</span>'}`;
+      $("#pass").textContent = `pasado sa ${Math.round(sc.passing)}% ${sc.passed ? "✓" : "✗"} · ${sc.neutral === "ignore" ? "neutral=hindi bilang" : "neutral=kontra"} · ${sc.mode === "indicator" ? "bawat indicator" : "bawat grupo"}`;
+      $("#barI").style.width = Math.max(0, Math.min(100, ov)) + "%";
+      $("#barI").style.background = col;
+      $("#barE").style.left = sc.passing + "%";
+      $("#verdict").textContent = sc.verdict || "";
+      $("#lost").innerHTML = (sc.lost || []).length ? sc.lost.map((x) => `<div><span>${esc(x.name)} <span class="nt">(${esc(x.category)}, ${x.state === "neutral" ? "neutral" : "kontra"})</span></span><b>−${fx(x.points, 1)}</b></div>`).join("") : '<div class="empty">Walang bawas: lahat sang-ayon.</div>';
+    }
+    $("#tfs").innerHTML = ["H4", "H1", "M15", "M5"].map((k) => { const v = (D.tfs || {})[k] || "--";
+      return `<div class="tf"><b>${k}</b><span class="${v === "BULL" ? "up" : v === "BEAR" ? "dn" : "nt"}">${esc(v)}</span></div>`; }).join("");
+    renderIndicators();
+    const a = D.account;
+    $("#acct").textContent = a ? `equity ${fx(a.equity)} · today ${a.day_pl == null ? "--" : (a.day_pl >= 0 ? "+" : "") + fx(a.day_pl)}${a.followers ? " · +" + a.followers + " followers" : ""}` : "";
+    $("#trades").innerHTML = (D.trades || []).length ? D.trades.map((t) => `<div class="row"><span><b class="${t.side === "BUY" ? "up" : "dn"}">${esc(t.side)}</b> ${fx(t.volume)} @ <span class="mono">${fx(t.open)}</span><br><span class="nt">SL ${fx(t.sl)} · TP ${fx(t.tp)}${t.legs > 1 ? " · " + t.legs + " accounts" : ""}</span></span><b class="mono ${t.pnl >= 0 ? "up" : "dn"}">${t.pnl >= 0 ? "+" : ""}${fx(t.pnl)}</b></div>`).join("") : '<div class="empty">Walang open trade.</div>';
+    $("#fcs").innerHTML = (D.forecasts || []).length ? D.forecasts.map((f) => `<div class="row"><span><b class="${f.direction === "LONG" ? "up" : "dn"}">${esc(f.direction)}</b> ${esc(SETUP[f.setup] || f.setup)} · <span class="nt">${esc(f.status)}</span><br><span class="nt mono">E ${fx(f.entry)} · SL ${fx(f.sl)} · TP ${fx(f.tp)}</span></span><span class="nt">${f.confidence ?? ""}</span></div>`).join("") : '<div class="empty">Walang active forecast.</div>';
+    const ai = D.ai;
+    $("#aimeta").textContent = ai ? `${ai.mode} · ${tm(ai.t)}` : "";
+    $("#ai").innerHTML = ai ? (ai.ok ? esc(ai.text) : `<span class="dn">✗ ${esc(ai.text)}</span>`) : '<span class="empty">Wala pang tanong kay Claude.</span>';
+    $("#evs").innerHTML = (D.events || []).slice(0, 10).map((e) => `<div class="ev ${esc(e.kind)}">${esc(tm(e.wall))} ${esc(e.text)}</div>`).join("") || '<div class="empty">--</div>';
+  }
+
+  document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+    filter = b.dataset.f;
+    try { localStorage.setItem("rg_m_filter", filter); } catch (e) { /* ignore */ }
+    if (D) renderIndicators();
+  }));
+
+  async function poll() {
+    try {
+      const r = await fetch("/api/companion", { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      D = await r.json();
+      $("#stale").classList.remove("on");
+      render();
+    } catch (e) {
+      $("#stale").classList.add("on");
+    }
+    setTimeout(poll, document.hidden ? 15000 : 3000);
+  }
+  poll();
+})();
+</script>
+</body>
+</html>

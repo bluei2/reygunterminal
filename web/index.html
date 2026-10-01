@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>REYGUN SuperChart v2.6.5</title>
+<link rel="icon" type="image/svg+xml" href="brand/mark.svg">
+<link rel="stylesheet" href="style.css">
+<script src="lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="side">
+    <div class="brand">
+      <div class="logo">
+        <img src="brand/mark.svg" width="38" height="38" alt="">
+      </div>
+      <div><div class="b1">REYGUN</div><div class="b2">SUPERCHART</div>
+        <div class="ver-top"><span id="ver" class="ver-tag">v2.6.5</span> <span class="ver-build" id="verBuild">2026-10-01.20</span></div></div>
+    </div>
+
+    <div class="navlabel">WORKSPACE</div>
+    <nav id="nav">
+      <button class="nav" data-view="command" id="navCommand">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Command Center<span class="navdot" id="decDot"></span></button>
+      <button class="nav" data-view="forecast" id="navForecast">
+        <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/></svg>Forecast<span class="navdot" id="fcDot"></span></button>
+      <button class="nav" data-view="ai" id="navAI">
+        <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.9L19 9.7l-4.2 3.1L16.2 18 12 15l-4.2 3 1.4-5.2L5 9.7l5.2-1.8z"/></svg>AI Analyst<span class="navdot" id="aiDot"></span></button>
+      <button class="nav active" data-view="overview">
+        <svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Market Overview</button>
+      <button class="nav" data-view="tradeset" id="navTradeset">
+        <svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Trading<span class="navdot" id="tradeDot"></span></button>
+      <button class="nav" data-view="analyser">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/></svg>MTF Analyser<span class="navdot" id="navDot"></span></button>
+      <button class="nav" data-view="signals">
+        <svg viewBox="0 0 24 24"><path d="M12 12v.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.5 5.5a9 9 0 0 0 0 13M18.5 5.5a9 9 0 0 1 0 13"/></svg>Signal Center<span class="badge" id="sigBadge" hidden>0</span></button>
+      <button class="nav" data-view="plugins">
+        <svg viewBox="0 0 24 24"><path d="M9 3v4M15 3v4M7 7h10v5a5 5 0 0 1-10 0zM12 17v4"/></svg>Plugins<span class="badge soft" id="plugBadge">0</span></button>
+      <button class="nav" data-view="accounts" id="navAccounts">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6"/></svg>Accounts<span class="badge soft" id="acctBadge">1</span></button>
+      <button class="nav" data-view="journal" id="navJournal">
+        <svg viewBox="0 0 24 24"><path d="M6 3h11a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6M9 12h6"/></svg>Journal<span class="badge soft" id="jBadge">0</span></button>
+      <button class="nav" data-view="orderflow">
+        <svg viewBox="0 0 24 24"><path d="M4 4v16h16"/><rect x="7" y="9" width="3" height="8"/><rect x="12" y="6" width="3" height="11"/><rect x="17" y="11" width="3" height="6"/></svg>Order Flow</button>
+      <button class="nav" data-view="backtest">
+        <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/><circle cx="19" cy="8" r="1.5"/></svg>Backtest</button>
+      <button class="nav" data-view="news">
+        <svg viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-2 2"/><path d="M8 9h5M8 13h5"/></svg>News<span class="badge" id="newsBadge" hidden>!</span></button>
+      <button class="nav" data-view="system" id="navSystem">
+        <svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>System &amp; Alerts<span class="navdot" id="healthDot"></span></button>
+      <button class="nav" data-view="tape">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Tape &amp; Recording</button>
+    </nav>
+
+    <div class="side-foot">
+      <div class="estop" id="estopBox" hidden>
+        <button class="btn-sm master-btn" id="btnMaster" title="MASTER TRADING ENABLE: when OFF nothing trades (manual, auto). Saved.">MASTER: --</button>
+        <button class="btn-sm warnbtn" id="btnStopNew" title="AUTO OFF, DISARM, cancel REYGUN pending orders. Open positions stay.">⏸ STOP NEW TRADES</button>
+        <button class="btn-sm danger" id="btnEmergency" title="Stop everything; optionally close SuperChart positions">🛑 EMERGENCY STOP</button>
+        <div class="estop-msg" id="haltMsg"></div>
+      </div>
+      <div class="safe" id="safeBox">
+        <svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        <div><b id="safeTitle">READ-ONLY</b><span id="safeText">Analysis &amp; alerts only.<br>Never sends orders.</span></div>
+      </div>
+      <a class="m-link" href="/m" target="_blank" title="Read-only na view para sa cellphone">📱 Companion view (/m)</a>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main>
+    <div class="build-warn" id="buildWarn" hidden></div>
+    <header class="top">
+      <div class="live">
+        <span class="dot" id="liveDot"></span>
+        <div>
+          <div class="t1" id="liveTitle">CONNECTING…</div>
+          <div class="t2" id="liveSub">&nbsp;</div>
+        </div>
+      </div>
+      <div class="top-right">
+        <div class="pill"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span id="clock">--</span></div>
+        <div class="pill accent" id="session">--</div>
+        <button class="pill newspill" id="newsPill" hidden title="Next high-impact news (click for the News page)">
+          <svg viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M8 9h5M8 13h5"/></svg><span id="newsPillText">--</span></button>
+        <div class="replay-ctl" id="replayCtl" hidden>
+          <button id="btnSlower" title="Slower">−</button>
+          <span id="speed">x1</span>
+          <button id="btnFaster" title="Faster">+</button>
+          <button id="btnPause" title="Pause (space)">❚❚</button>
+        </div>
+        <button class="pill laybtn" id="btnLayout" title="Piliin kung anong cards ang makikita sa Market Overview">⚙ LAYOUT</button>
+        <button class="rec" id="btnRec" title="Record ticks to CSV"><span class="recdot"></span><span id="recLabel">REC</span></button>
+      </div>
+    </header>
+
+    <section class="cards">
+      <div class="card kpi">
+        <div class="kicon up" id="pxIcon"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></div>
+        <div><div class="klabel" id="pxLabel">Price</div><div class="kval mono" id="pxVal">--</div><div class="ksub" id="pxSub">--</div></div>
+      </div>
+      <div class="card kpi" id="kpiScore" hidden>
+        <div class="ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" class="ring-bg"/><circle cx="22" cy="22" r="18" class="ring-fg" id="ringFg"/></svg></div>
+        <div><div class="klabel">Confluence score</div><div class="kval mono" id="scoreVal">-/4</div><div class="ksub" id="scoreSub">--</div></div>
+      </div>
+      <div class="card kpi">
+        <div class="kicon" id="biasIcon"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg></div>
+        <div><div class="klabel">HTF bias</div><div class="kval" id="biasVal">--</div><div class="ksub" id="biasSub">--</div></div>
+      </div>
+      <div class="card kpi">
+        <div class="kicon"><svg viewBox="0 0 24 24"><path d="M4 8h16M4 16h16M8 4v4M16 16v4"/></svg></div>
+        <div><div class="klabel">Spread</div><div class="kval mono" id="sprVal">--</div><div class="ksub" id="sprSub">--</div></div>
+      </div>
+      <div class="card kpi">
+        <div class="kicon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 15h2"/></svg></div>
+        <div><div class="klabel">Equity</div><div class="kval mono" id="eqVal">--</div><div class="ksub" id="eqSub">--</div></div>
+      </div>
+    </section>
+
+    <!-- ---------- OVERVIEW ---------- -->
+    <section class="view" id="view-overview">
+      <div class="ov-grid">
+        <div class="card chart-card">
+          <div class="tstrip" id="tStrip">
+            <div class="ts-seg" id="tsMode"><button data-mode="manual">✋ MANUAL</button><button data-mode="auto">⚡ AUTO</button></div>
+            <span class="ts-chip" id="tsArm" title="LIVE = totoong order · PAPER = simulated"></span>
+            <div class="ts-seg tsprof" id="tsProf"><button data-p="scalp">SCALP</button><button data-p="normal">NORMAL</button><button data-p="aggressive">AGGRESSIVE</button></div>
+            <div class="ts-seg tsstrat" id="tsStrat" title="Aling strategy ang papasukan ng AUTO"><span class="ts-lbl">AUTO:</span><button data-stauto="trend" data-lbl="TREND">○ TREND</button><button data-stauto="pullback" data-lbl="PULLBACK">○ PULLBACK</button><button data-stauto="conso" data-lbl="CONSO">○ CONSO</button></div>
+            <button class="ts-chip pm" id="tsPm" title="Pag-secure ng profit (Position manager) · i-click para baguhin" hidden>🛡 --</button>
+            <button class="ts-chip man" id="tsManual" title="Manual BUY / SELL (may confirm)">BUY / SELL ▾</button>
+            <span class="ts-accts" id="tsAccts"></span>
+            <span class="ts-info" id="tsInfo"></span>
+            <div class="man-pop" id="manPop" hidden></div>
+          </div>
+          <div class="chart-head">
+            <div>
+              <div class="ch-title" id="chTitle">--</div>
+              <div class="ch-sub">Price action <span class="sess-badges" id="sessBadges"></span></div>
+            </div>
+            <div class="ch-tools">
+              <button class="tool" id="btnRefresh" title="Refresh chart (R)">
+                <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+                <span>REFRESH</span></button>
+              <div class="layers-wrap">
+                <button class="tool" id="btnLayers">
+                  <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>
+                  <span id="layersLabel">LAYERS 0/0</span></button>
+                <div class="layers-menu" id="layersMenu" hidden></div>
+              </div>
+              <div class="tfs" id="tfs"></div>
+              <button class="tool" id="btnTrade1" title="Gawing AUTO TRADE timeframe ang TF ng chart na ito">⚡ <span id="trade1Lbl">AUTO TF</span></button>
+              <button class="tool" id="btnSplit" title="Dalawang chart: pumili ng ibang TF sa pangalawa">⧉ <span>2 SCREEN</span></button>
+              <button class="tool" id="btnPop" title="Buksan ang pangalawang chart sa bagong window (para sa 2nd monitor)">↗</button>
+            </div>
+          </div>
+          <div class="charts-row" id="chartsRow">
+          <div class="chart-wrap" id="chartWrap">
+            <div id="chart"></div>
+            <canvas id="zones"></canvas>
+            <div class="legend" id="legend"></div>
+          </div>
+          <div class="chart2" id="chart2Box" hidden>
+            <div class="c2-head"><b id="c2Title">--</b><div class="tfs" id="c2Tfs"></div>
+              <button class="tool mini" id="btnTrade2" title="Gawing AUTO TRADE timeframe ang TF ng chart na ito">⚡ <span id="trade2Lbl">AUTO TF</span></button></div>
+            <div class="chart2-wrap"><div id="chart2"></div></div>
+          </div>
+          </div>
+          <div class="act-inds" id="actInds"></div>
+        </div>
+
+        <div class="rightcol">
+          <div class="card stratside" id="stratSide">
+            <div class="ss-top"><h3>STRATEGIES <span class="h3sub" id="ssTf"></span></h3></div>
+            <div class="ss-at" id="ssAuto"></div>
+            <div id="ssRows"></div>
+          </div>
+          <div class="card modecard" id="modeCard" hidden>
+            <div class="mode-top"><span class="mode-big" id="modeBig">MANUAL</span><span class="mode-chips" id="modeChips"></span></div>
+            <div class="mode-sub" id="modeSub"></div>
+            <div class="mode-accts" id="modeAccts"></div>
+          </div>
+          <div class="card trade" id="tradeCard" hidden>
+            <div class="tr-head">
+              <h3>Trade <span class="mode-pill" id="modePill">PAPER</span></h3>
+              <label class="arm" title="Nothing can be sent until you ARM. Always OFF when the app starts.">
+                <input type="checkbox" id="armSwitch"><span class="arm-track"><span class="arm-knob"></span></span>
+                <span class="arm-label" id="armLabel">DISARMED</span></label>
+            </div>
+            <div class="tr-grid">
+              <label class="pf"><span>Lot (master)</span><input type="number" id="tLot" value="0.01" step="0.01" min="0.01"></label>
+              <label class="pf"><span>SL distance $</span><input type="number" id="tSL" value="5" step="0.1" min="0"></label>
+              <label class="pf"><span>TP distance $</span><input type="number" id="tTP" value="10" step="0.1" min="0"></label>
+            </div>
+            <div class="tr-preview" id="tPreview">--</div>
+            <div class="tr-btns">
+              <button class="tbtn sell" id="btnSell"><span>SELL</span><b id="sellPx">--</b></button>
+              <button class="tbtn buy" id="btnBuy"><span>BUY</span><b id="buyPx">--</b></button>
+            </div>
+            <div class="tr-news" id="tNews" hidden></div>
+            <div class="tr-reason" id="tReason"></div>
+            <div class="tr-accts" id="tAccts"></div>
+          </div>
+          <div class="card" id="groupsCard" hidden>
+            <h3>SuperChart trades <span class="h3sub" id="groupsSum"></span></h3>
+            <div id="groups"></div>
+            <button class="btn-sm danger" id="btnCloseAll" style="margin-top:10px">Close ALL SuperChart trades</button>
+          </div>
+          <div class="card verdict" id="verdictCard">
+            <div class="v-top">
+              <div class="v-icon" id="vIcon"><svg viewBox="0 0 24 24"><path d="M4 16l6-6 4 4 6-7"/><path d="M14 7h6v6"/></svg></div>
+              <div>
+                <div class="v-kicker">ANALYSER VERDICT</div>
+                <div class="v-main" id="vMain">--</div>
+              </div>
+            </div>
+            <div class="v-text" id="vText">waiting for data…</div>
+            <div class="scorebar"><div id="scoreBar"></div><i id="passMark" title="passing score"></i></div>
+          </div>
+          <div class="card" id="regCard">
+            <h3 class="h3row">Market regime <span class="h3sub" id="regSub"></span>
+              <button class="tool mini" id="regGear" title="Regime settings">⚙</button></h3>
+            <div id="regBody">--</div>
+            <div class="im-set" id="regSet" hidden></div>
+          </div>
+          <div class="card" id="sigStatCard" hidden>
+            <h3>Signal score rate <span class="h3sub">signals on this chart</span></h3>
+            <div id="sigStats"></div>
+          </div>
+          <div class="card">
+            <h3 class="h3row">Confluence read <button class="tool mini" id="btnScoring" title="Passing score and group weights">⚙ SCORING</button></h3>
+            <div class="scoring-edit" id="scoringEdit" hidden></div>
+            <ul class="checks" id="checks"></ul>
+            <div class="votes" id="votes"></div>
+            <p class="modnote" id="modNote" hidden></p>
+          </div>
+          <div class="card" id="imCard" hidden>
+            <h3 class="h3row">Intermarket <span class="h3sub" id="imSub">kasabay at salungat ng gold</span>
+              <button class="tool mini" id="imGear" title="Symbols and relations">⚙</button></h3>
+            <div class="im-sum" id="imSum"></div>
+            <div class="im-rows" id="imRows"></div>
+            <div class="im-set" id="imSet" hidden></div>
+          </div>
+          <div class="card">
+            <h3>Multi-timeframe</h3>
+            <div class="mtf" id="mtf"></div>
+          </div>
+          <div class="card" id="liqCard">
+            <h3>Liquidity &amp; zones</h3>
+            <div class="liq" id="liq"></div>
+          </div>
+          <div class="card" id="stratCard" hidden>
+            <h3>Strategies</h3>
+            <div id="strats"></div>
+          </div>
+          <div class="card" id="posCard" hidden>
+            <h3>All MT5 positions <span class="h3sub">master, incl. EAs</span></h3>
+            <div id="pos"></div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-row" id="bottomRow">
+        <div class="card sigpanel" id="sigCard" hidden>
+          <h3>Signals <span class="h3sub">BUY / SELL = direksyon ng signal · WIN / LOSS = resulta kung pinasok (TP muna = WIN, SL muna = LOSS) · ✓ sang-ayon · ✗ salungat · ⚠ caution · i-click para sa detalye</span> <span class="h3sub" id="sigSum"></span></h3>
+          <div class="sigpanel-body">
+            <div class="sig-list" id="sigDetails"></div>
+            <div class="sig-detail" id="sigDetail"></div>
+          </div>
+        </div>
+        <div class="card log-card">
+          <h3>Event log <span class="h3sub">structure breaks · sweeps · FVG · strategy signals</span></h3>
+          <div class="log" id="log"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- ANALYSER ---------- -->
+    <section class="view" id="view-analyser" hidden>
+      <div class="card wide">
+        <h3>Multi-timeframe analyser <span class="h3sub">fractal swings · BOS/CHoCH on close · sweeps · FVG · premium/discount</span></h3>
+        <div class="table-wrap"><table class="tbl" id="anTable"></table></div>
+      </div>
+      <div class="an-grid">
+        <div class="card"><h3>Verdict</h3><div id="anVerdict"></div></div>
+        <div class="card"><h3>Paano binubuo ang score</h3>
+          <ol class="rules" id="rules"></ol>
+          <p class="muted" id="rulesNote"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- SIGNALS ---------- -->
+    <section class="view" id="view-signals" hidden>
+      <div class="an-grid">
+        <div class="card"><h3>Strategy signals <span class="h3sub">alerts only · no orders</span></h3><div class="sig-list" id="sigList"></div></div>
+        <div class="card"><h3>Full event log</h3><div class="log tall" id="logFull"></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- PLUGINS ---------- -->
+    <section class="view" id="view-plugins" hidden>
+      <div class="card wide">
+        <h3>Plugins <span class="h3sub">files in the plugins\ folder · switch on/off here · saved automatically</span></h3>
+        <div class="plug-list" id="plugList"></div>
+      </div>
+      <div class="card wide">
+        <h3>Add your own indicator or strategy</h3>
+        <ol class="rules">
+          <li>Copy <code>plugins\_template.py</code> to a new name without the leading underscore, e.g. <code>plugins\my_rsi.py</code></li>
+          <li><b>Indicator</b>: write <code>compute(bars, tf, ctx)</code> and return <code>Overlay(lines, levels, markers, zones)</code>. It draws on this chart and in REYGUN TERM.</li>
+          <li><b>Strategy</b>: write <code>evaluate(ctx)</code> and return a <code>Signal(...)</code>. It shows in Signal Center. Alerts only.</li>
+          <li>Restart SuperChart and switch it on here. If it errors, only that plugin is switched off and the error shows here.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ---------- TAPE ---------- -->
+    <section class="view" id="view-accounts" hidden>
+      <div class="card wide">
+        <h3>Accounts <span class="h3sub" id="acctMode"></span></h3>
+        <div class="acct-help">
+          The <b>master</b> is the MT5 terminal the chart reads from. Every BUY/SELL from SuperChart goes to the master and to each
+          enabled <b>follower</b> with the follower's own <b>fixed lot</b>. SL/TP use the same $ distance from each account's own entry.
+          Moving SL/TP, partial closes and closes on the master are copied to the followers (also when you do it inside MT5).
+          <br><b>Each follower needs its own MT5 installation</b> (its own folder with terminal64.exe), logged in once with
+          "Save password" ticked and <b>Algo Trading ON</b>. Passwords are never stored here.
+        </div>
+        <div class="mt5find">
+          <button class="btn-sm" id="btnFindMt5">🔍 Hanapin ang bukas na MT5</button>
+          <span class="muted small">Ipapakita ang lahat ng MT5 na bukas sa PC / VPS na ito at kung anong account ang naka-login. Isang click: MASTER o FOLLOWER.</span>
+          <div id="mt5List"></div>
+        </div>
+        <div id="acctList"></div>
+        <div class="conn-test" id="connTest" hidden></div>
+        <div class="acct-actions">
+          <button class="btn-sm ghost" id="btnAddFollower">+ Add follower</button>
+          <button class="btn-sm" id="btnSaveAccts">Save accounts</button>
+          <button class="btn-sm ghost" id="btnAutoSym" title="Find the gold symbol on every follower's broker">🔍 Auto-detect symbols</button>
+          <button class="btn-sm test" id="btnTestConn" title="Checks every account WITHOUT placing an order">🔌 Test connections</button>
+          <span class="muted" id="acctSaved"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-journal" hidden>
+      <div class="card wide">
+        <h3>Trade journal <span class="h3sub" id="jMode"></span>
+          <a class="btn-sm ghost jcsv" href="/api/journal.csv" download>Export CSV</a></h3>
+        <div class="jstats" id="jStats"></div>
+      </div>
+      <div class="jcharts">
+        <div class="card">
+          <h3 class="h3row">Equity curve <span class="h3sub" id="eqInfo">cumulative P/L per account</span>
+            <span class="eq-tabs" id="eqTabs"></span></h3>
+          <div class="eqchart" id="eqChart"></div>
+        </div>
+        <div class="card">
+          <h3 class="h3row">P/L calendar <span class="h3sub">Manila time · click a day</span>
+            <span class="cal-nav"><button class="tool mini" id="calPrev">‹</button><b id="calMonth">--</b><button class="tool mini" id="calNext">›</button></span></h3>
+          <div class="pcal" id="pcal"></div>
+          <div class="pcal-sum" id="pcalSum"></div>
+        </div>
+      </div>
+      <div class="an-grid">
+        <div class="card"><h3>Pumasa vs hindi pumasa sa passing score <span class="h3sub">score sa oras ng entry</span></h3><div id="jPass"></div></div>
+        <div class="card"><h3>Manual vs Auto vs News</h3><div id="jBands"></div></div>
+      </div>
+      <div class="an-grid">
+        <div class="card"><h3 class="h3row">Heatmap: oras × araw <span class="h3sub">Manila time · oras ng entry</span>
+          <span class="eq-tabs" id="hmTabs"></span></h3><div id="heatmap"></div></div>
+        <div class="card"><h3>Ayon sa market regime <span class="h3sub">regime sa oras ng entry</span></h3><div id="jRegime"></div></div>
+      </div>
+      <div class="an-grid">
+        <div class="card"><h3>Ayon sa exit <span class="h3sub">TP · SL · BE · TRAIL · EXIT GUARD · …</span></h3><div class="table-wrap"><div class="anl" id="aExit"></div></div></div>
+        <div class="card"><h3>Ayon sa session</h3><div class="table-wrap"><div class="anl" id="aSess"></div></div></div>
+      </div>
+      <div class="an-grid">
+        <div class="card"><h3>Setup performance <span class="h3sub">descriptive lang, hindi ranking ng "best"</span></h3><div class="table-wrap"><div class="anl" id="aSetup"></div></div></div>
+        <div class="card"><h3>MFE / MAE <span class="h3sub">gaano kalayo pumabor / kumontra</span></h3><div id="aMfe"></div></div>
+      </div>
+      <div class="card wide">
+        <h3>Trades <span class="h3sub">click a row for the score breakdown at entry · 📷 = chart picture</span></h3>
+        <div class="table-wrap"><table class="tbl jtbl" id="jTable"></table></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-orderflow" hidden>
+      <div class="of-grid">
+        <div class="card of-card">
+          <div class="of-head">
+            <h3>Footprint <span class="h3sub" id="ofStatus"></span></h3>
+            <div class="of-tools">
+              <div class="tfs" id="ofTfs"></div>
+              <label class="pf of-inl"><span>Bars</span><select id="ofN"><option selected>12</option><option>20</option><option>30</option><option>40</option></select></label>
+              <label class="pf of-inl"><span>Row $</span><input type="number" id="ofRow" step="0.05" min="0.05"></label>
+            </div>
+          </div>
+          <div class="of-canvas-wrap" id="ofWrap"><canvas id="ofCanvas"></canvas></div>
+          <div class="of-legend">Bawat cell: <b class="c-bear">SELL</b> × <b class="c-bull">BUY</b> ticks sa presyong iyon ·
+            <b>matapang na kulay</b> = imbalance (≥3× ang kabila, pahilis) · <span class="of-poc">▭</span> POC ·
+            ibaba: Δ (buy − sell), volume, at Cum Δ (reset bawat araw).
+            <i>MT5 CFD: tinatantya ang buy/sell mula sa tick direction, hindi totoong exchange volume.</i></div>
+        </div>
+        <div class="card of-side">
+          <h3>Order flow events <span class="h3sub">absorption · stacked · divergence</span></h3>
+          <div id="ofEvents"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-backtest" hidden>
+      <div class="card wide">
+        <h3>Strategy tester <span class="h3sub">Analyser Signals · history mula sa master MT5 · score na walang silip sa hinaharap</span></h3>
+        <div class="bt-form">
+          <label class="pf"><span>Period (days)</span><select id="btDays"><option>7</option><option>14</option><option selected>30</option><option>60</option><option>90</option><option>180</option><option value="dates">Custom dates…</option></select></label>
+          <label class="pf bt-date" hidden><span>From (server date)</span><input type="date" id="btFrom"></label>
+          <label class="pf bt-date" hidden><span>To (server date)</span><input type="date" id="btTo"></label>
+          <label class="pf" id="btSkipWrap"><span>Skip recent days</span><input type="number" id="btSkip" value="0" min="0"></label>
+          <label class="pf"><span>Timeframe</span><select id="btTf"><option selected>M5</option><option>M15</option><option>M30</option><option>H1</option></select></label>
+          <label class="pf"><span>Spread cost $</span><input type="number" id="btSpread" value="0.30" step="0.05" min="0"></label>
+          <label class="pf"><span>Lot (for $)</span><input type="number" id="btLot" value="0.01" step="0.01" min="0.01"></label>
+          <label class="pf"><span>Optimize for</span><select id="btObj"><option value="total_r">Total R</option><option value="profit_factor">Profit factor</option><option value="expectancy">Avg R / trade</option><option value="calmar">R ÷ max drawdown</option></select></label>
+          <label class="pf"><span>Min trades (in-sample)</span><input type="number" id="btMin" value="15" min="3"></label>
+          <label class="ck bt-ck"><input type="checkbox" id="btW"> also try group weights</label>
+          <label class="pf"><span>Spread mode</span><select id="btSpMode"><option value="fixed">fixed</option><option value="variable">variable (MT5 history)</option></select></label>
+          <label class="pf"><span>Commission $/lot</span><input type="number" id="btComm" value="0" step="0.5" min="0"></label>
+          <label class="pf"><span>Slippage $</span><input type="number" id="btSlip" value="0" step="0.05" min="0"></label>
+          <label class="pf"><span>Swap $/lot/night</span><input type="number" id="btSwap" value="0" step="0.5"></label>
+          <label class="pf"><span>Execution delay ms</span><input type="number" id="btDelay" value="0" step="100" min="0"></label>
+          <label class="pf"><span>Breakeven at R (0 = off)</span><input type="number" id="btBE" value="0" step="0.25" min="0"></label>
+          <label class="ck bt-ck"><input type="checkbox" id="btIntra"> Intrabar M1 (SL/TP sa M1)</label>
+          <label class="pf"><span>Entry signal</span><select id="btEntry"><option value="analyser">Analyser READY (dati)</option><option value="reversal_ok">Reversal arrow R✓ (kumpirmado)</option><option value="reversal_any">Reversal arrow R? + R✓ (lahat)</option><option value="router">Regime router (trend 1:2 / range arrow 1:1)</option><option value="st_trend">Strategy: TREND</option><option value="st_pullback">Strategy: PULLBACK</option><option value="st_conso">Strategy: CONSOLIDATION (pending, level 1)</option></select></label>
+          <label class="pf"><span>Arrow: min reversal score</span><input type="number" id="btRevMin" value="60" min="0" max="100" step="5"></label>
+          <label class="ck"><input type="checkbox" id="btRevBias" checked> Arrow: kasabay lang ng HTF bias</label>
+          <label class="pf"><span>SMC filter (same engine as live)</span><select id="btSmc"><option value="off">off</option><option value="setup">valid SMC setup</option><option value="retested">setup retested</option><option value="high">HIGH quality only</option></select></label>
+          <label class="pf"><span>Daily target R (report)</span><input type="number" id="btDT" value="2" step="0.5" min="0"></label>
+        </div>
+        <div class="bt-actions">
+          <button class="btn-sm" id="btRun">▶ Run backtest (current setup)</button>
+          <button class="btn-sm test" id="btOpt">⚙ Optimize (find best setup)</button>
+          <button class="btn-sm ghost" id="btWF" title="Optimize on TRAIN, test on the next unseen window, roll forward">⇢ Walk-forward</button>
+          <label class="pf bt-inl"><span>train d</span><input type="number" id="btTrain" value="20" min="3"></label>
+          <label class="pf bt-inl"><span>test d</span><input type="number" id="btTest" value="5" min="1"></label>
+          <div class="bt-prog"><div id="btBar"></div></div><span class="muted" id="btMsg"></span>
+        </div>
+        <div class="bt-cur" id="btCur"></div>
+      </div>
+      <div class="card wide" id="btResCard" hidden>
+        <h3 class="h3row">Result <span class="h3sub" id="btResSub"></span>
+          <button class="btn-sm ghost" id="btBase" title="Drift monitor: compare live results with this backtest">Set as drift baseline</button></h3>
+        <div class="jstats" id="btStats"></div>
+        <div class="bt-integ" id="btInteg"></div>
+        <div class="bt-two">
+          <div><div class="klabel">Equity curve (R)</div><div class="bt-eq" id="btEq"></div></div>
+          <div><div class="klabel">By month</div><div class="table-wrap"><table class="tbl" id="btMonth"></table></div></div>
+        </div>
+      </div>
+      <div class="card wide" id="btWFCard" hidden>
+        <h3>Walk-forward <span class="h3sub" id="btWFSub"></span></h3>
+        <div class="table-wrap"><table class="tbl bt-opt" id="btWFTbl"></table></div>
+      </div>
+      <div class="card wide" id="btMCCard" hidden>
+        <h3 class="h3row">Monte Carlo stress test <span class="h3sub">hindi ito hula: random na pagkakasunod ng parehong trades</span></h3>
+        <div class="bt-actions"><label class="pf bt-inl"><span>runs</span><input type="number" id="mcN" value="1000" min="100" step="100"></label>
+          <label class="pf bt-inl"><span>+slippage R</span><input type="number" id="mcSlip" value="0" step="0.05" min="0"></label>
+          <label class="pf bt-inl"><span>skip %</span><input type="number" id="mcSkip" value="0" step="5" min="0" max="80"></label>
+          <label class="pf bt-inl"><span>trades</span><select id="mcSrc"><option value="backtest">huling backtest</option><option value="journal">journal (live/paper)</option></select></label>
+          <button class="btn-sm" id="mcRun">Run</button></div>
+        <div id="mcOut"></div>
+      </div>
+      <div class="card wide" id="btOptCard" hidden>
+        <h3>Best setups <span class="h3sub" id="btOptSub"></span></h3>
+        <p class="muted small">Pinili sa <b>in-sample</b> (unang 70%). Ang <b>out-of-sample</b> (huling 30%) ay hindi ginamit sa pagpili: kapag maganda pa rin doon (<span class="c-bull">✓ robust</span>), mas mapagkakatiwalaan ang setup. Kapag maganda lang sa in-sample, malamang overfit. Nasa itaas ang mga robust.</p>
+        <div class="table-wrap"><table class="tbl bt-opt" id="btOptTbl"></table></div>
+      </div>
+      <div class="card wide" id="btTrCard" hidden>
+        <h3>Trades <span class="h3sub">huling 100 · server time</span></h3>
+        <div class="table-wrap bt-trades"><table class="tbl" id="btTrades"></table></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-news" hidden>
+      <div class="an-grid news-grid">
+        <div class="card">
+          <h3>Economic calendar <span class="h3sub" id="calInfo"></span></h3>
+          <div class="news-filters" id="calFilters"></div>
+          <div class="cal" id="calList"></div>
+        </div>
+        <div class="card">
+          <h3>Headlines <span class="h3sub" id="rssInfo"></span></h3>
+          <div class="news-voice">
+            <label class="tg chart"><input type="checkbox" id="voiceOn"><span>🔊 VOICE</span></label>
+            <label class="tg chart"><input type="checkbox" id="voiceHeadlines"><span>READ HEADLINES</span></label>
+            <button class="btn-sm ghost" id="voiceTest">Test voice</button>
+            <span class="muted" id="voiceNote"></span>
+          </div>
+          <div class="heads" id="headList"></div>
+        </div>
+      </div>
+      <div class="card wide">
+        <h3 class="h3row">News settings <span class="h3sub">saved in news_settings.json</span>
+          <button class="tool mini" id="newsRefresh" title="Fetch now">⟳ FETCH NOW</button></h3>
+        <div class="news-set" id="newsSet"></div>
+        <div class="news-err" id="newsErr"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-forecast" hidden>
+      <div class="fc-banner">🔮 FORECAST: virtual na prediction lang. <b>Hindi ito trade</b>, walang order na ipinapadala, at hindi nito binabago ang score o ang AUTO TRADE.</div>
+      <div class="card wide fc-dash" id="fcDash">--</div>
+      <div class="card wide"><h3 class="h3row">Forecast chart <span class="h3sub" id="fcChSub">violet = forecast (virtual) · hindi totoong order</span>
+        <span class="fc-tfbar" id="fcTfs"></span></h3>
+        <div class="fc-chart" id="fcChart"></div></div>
+      <div class="card wide"><h3 class="h3row">Forecast indicators <span class="h3sub" id="fcProSub">parang demo account: hiwalay sa live score at AUTO TRADE</span></h3>
+        <div class="fc-pro-top">
+          <label class="ck"><input type="radio" name="fcpro" value="live" id="fcProLive"> Gamitin ang LIVE setup (parehong score ng terminal)</label>
+          <label class="ck"><input type="radio" name="fcpro" value="own" id="fcProOwn"> Sariling forecast setup (demo)</label>
+          <button class="btn-sm ghost" id="fcProCopy" title="Kopyahin ang kasalukuyang live indicators papunta sa forecast setup">Copy from live</button>
+          <label class="pf bt-inl"><span>passing %</span><input type="number" id="fcProPass" min="0" max="100" step="1"></label>
+          <button class="btn-sm" id="fcProSave">Save</button><span class="muted small" id="fcProMsg"></span>
+        </div>
+        <div id="fcProList"></div></div>
+      <div class="card wide"><h3 class="h3row">Active forecasts <span class="h3sub" id="fcActSub"></span>
+        <button class="btn-sm ghost" id="fcCreate" title="Suriin ngayon ang huling sarado na bar (parehong rules)">Evaluate now</button></h3>
+        <div class="fc-cards" id="fcActive"></div></div>
+      <div class="card wide"><h3>Recent results</h3><div class="fc-cards" id="fcResults"></div></div>
+      <div class="card wide"><h3 class="h3row">Forecast statistics <span class="h3sub">hiwalay sa totoong trading journal</span></h3>
+        <div id="fcStats">--</div></div>
+      <div class="an-grid">
+        <div class="card"><h3 class="h3row">Forecast settings <span class="h3sub">para sa Forecast lang, hindi sa AUTO TRADE</span></h3>
+          <div class="sys-form" id="fcSet"></div>
+          <div class="acct-actions"><button class="btn-sm" id="fcSave">Save</button><span class="muted small" id="fcMsg"></span></div></div>
+      </div>
+      <div class="card wide"><h3 class="h3row">Forecast replay <span class="h3sub">history, sarado na bars lang, walang silip sa hinaharap</span></h3>
+          <div class="sys-form"><label class="pf"><span>Days</span><input type="number" id="fcDays" value="10" min="2" max="120"></label></div>
+          <div class="acct-actions"><button class="btn-sm" id="fcReplay">▶ Run replay</button><span class="muted small" id="fcRepMsg"></span></div>
+          <div id="fcRepOut"></div></div>
+    </section>
+
+    <section class="view" id="view-ai" hidden>
+      <div class="fc-banner ai-banner">✦ AI ANALYST (Claude Fable): second opinion lang. <b>Hindi ito nagte-trade</b>, hindi nito binabago ang score, settings o AUTO TRADE, at tumatawag lang sa API kapag pinindot mo ang button.</div>
+      <div class="card wide"><h3 class="h3row">Tanungin si Claude <span class="h3sub" id="aiSub"></span></h3>
+        <div class="ai-actions">
+          <button class="btn-sm" data-ai="analysis">📈 Basahin ang chart ngayon</button>
+          <button class="btn-sm" data-ai="score">🧮 Suriin ang score ko</button>
+        </div>
+        <div class="ai-ask"><textarea id="aiQ" rows="2" placeholder="Sariling tanong, hal. &quot;Maganda bang mag-short sa pVAH ngayon?&quot;"></textarea>
+          <button class="btn-sm" data-ai="question">Itanong</button></div>
+        <div class="muted small" id="aiMsg"></div>
+        <div class="ai-out" id="aiOut"></div></div>
+      <div class="an-grid">
+        <div class="card"><h3 class="h3row">AI settings <span class="h3sub">naka-save sa PC mo lang</span></h3>
+          <div class="sys-form" id="aiSet"></div>
+          <div class="acct-actions"><button class="btn-sm" id="aiSave">Save</button><button class="btn-sm ghost" id="aiClear">Alisin ang key</button><span class="muted small" id="aiSetMsg"></span></div></div>
+        <div class="card"><h3>History</h3><div id="aiHist" class="ai-hist">--</div></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-tradeset" hidden>
+      <div class="trading-top">
+          <div class="card autocard" id="autoCard" hidden>
+            <div class="tr-head">
+              <h3>Auto trade <span class="h3sub" id="autoSub">signals → orders</span></h3>
+              <label class="arm" title="Takes the chart's signals automatically. Always OFF when the app starts. Needs ARM.">
+                <input type="checkbox" id="autoSwitch"><span class="arm-track"><span class="arm-knob"></span></span>
+                <span class="arm-label" id="autoLabel">OFF</span></label>
+            </div>
+            <div class="auto-status" id="autoStatus"></div>
+            <div class="auto-diag" id="autoDiag"></div>
+            <div class="auto-log" id="autoLog"></div>
+            <div class="nt-actions"><button class="tool mini" id="autoGear">⚙ SETTINGS →</button></div>
+          </div>
+          <div class="card ntcard" id="ntCard" hidden>
+            <div class="tr-head">
+              <h3><span id="ntTitle">News trade</span> <span class="h3sub">conso breakout</span></h3>
+              <label class="arm" id="ntSwitchWrap" title="Automatic pending orders before high-impact news. Always OFF when the app starts. Needs ARM.">
+                <input type="checkbox" id="ntSwitch"><span class="arm-track"><span class="arm-knob"></span></span>
+                <span class="arm-label" id="ntLabel">OFF</span></label>
+            </div>
+            <div class="nt-status" id="ntStatus">--</div>
+            <div class="nt-plan" id="ntPlan"></div>
+            <div class="nt-events" id="ntEvents"></div>
+            <div class="nt-actions">
+              <button class="tool mini" id="ntGear">⚙ SETTINGS →</button>
+              <button class="btn-sm danger" id="ntCancel">Cancel news orders</button>
+            </div>
+          </div>
+          <div class="card" id="egCard" hidden>
+            <div class="tr-head">
+              <h3>Exit guard <span class="h3sub">kapag bumaliktad ang trend</span></h3>
+              <label class="arm" title="Isinasara ang bukas na trade kapag may TREND CHANGE na kontra dito. Gumagana lang kapag naka-ARM.">
+                <input type="checkbox" id="egSwitch"><span class="arm-track"><span class="arm-knob"></span></span>
+                <span class="arm-label" id="egLabel">OFF</span></label>
+            </div>
+            <div class="sys-form" id="egForm"></div>
+            <div class="auto-log" id="egLog"></div>
+          </div>
+      </div>
+      <div class="card strat-card" id="stratsCard"><h3 class="h3row">STRATEGIES <span class="h3sub">bawat market condition may sariling set ng indicators · live sa huling sarado na bar ng AUTO TF · ang NEWS ay nasa NEWS TRADE card</span>
+          <span class="h3sub" id="stratTf"></span></h3>
+        <div class="prof-bar" id="profBar"></div>
+        <div class="strat-grid" id="stratGrid">--</div>
+        <div class="acct-actions"><button class="btn-sm" id="stratSave">Save strategies</button><span class="muted small" id="stratMsg"></span></div>
+        <p class="muted small">AUTO ✓ = papasukan ng AUTO TRADE ang strategy na ito (kailangang naka-ON at naka-ARM ang AUTO, dadaan pa rin sa lahat ng gate: session, news, risk, max trades). 🔒 = required na kondisyon (trigger). Subukan muna sa Forecast (Strategy setups) at Backtest (Entry signal → Strategy) bago i-AUTO.</p>
+      </div>
+      <div class="an-grid trading-set">
+        <div class="card" id="autoSetCard"><h3 class="h3row">AUTO TRADE settings <span class="h3sub">signals, router, reversal arrows, sessions, filters</span></h3>
+          <div class="auto-set" id="autoSet"></div></div>
+        <div class="card" id="ntSetCard"><h3 class="h3row">NEWS TRADE settings <span class="h3sub">close open trades + BUY STOP / SELL STOP bago ang news</span></h3>
+          <div class="nt-set" id="ntSet"></div></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-command" hidden>
+      <div class="card wide cc-top" id="ccTop">--</div>
+      <div class="cc-grid">
+        <div class="cc-col">
+          <div class="card"><h3>Setup matrix <span class="h3sub">binabasa lang ang dating engine at plugins · hindi dagdag sa score</span></h3>
+            <div id="ccMatrix"></div></div>
+          <div class="card"><h3>Why not trade?</h3><div id="ccWhy"></div></div>
+        </div>
+        <div class="cc-col">
+          <div class="card cc-plan"><h3 class="h3row">Trade plan <span class="h3sub" id="ccPlanSub"></span></h3>
+            <div class="sys-form">
+              <label class="pf"><span>Side</span><select id="ccSide"><option value="0">Ayon sa decision</option><option value="1">BUY</option><option value="-1">SELL</option></select></label>
+              <label class="pf"><span>Lot (master)</span><input type="number" id="ccLot" step="0.01" min="0.01"></label>
+              <label class="pf"><span>SL distance $</span><input type="number" id="ccSL" step="0.1" min="0"></label>
+              <label class="pf"><span>TP distance $</span><input type="number" id="ccTP" step="0.1" min="0"></label>
+            </div>
+            <div id="ccPlan"></div>
+            <div class="acct-actions"><button class="tbtn" id="ccConfirm" disabled>CONFIRM</button></div>
+          </div>
+          <div class="card"><h3>Decision timeline</h3><div class="cc-tl" id="ccTimeline"></div></div>
+        </div>
+      </div>
+      <div class="cc-grid">
+        <div class="cc-col">
+          <div class="card"><h3 class="h3row">Setup quality <span class="h3sub" id="sqSub">grouped categories · 0.0 – 1.0 · walang double counting</span></h3>
+            <div id="sqBody">--</div></div>
+          <div class="card"><h3 class="h3row">Decision rules <span class="h3sub">alin ang REQUIRED · conflict policy · regime</span></h3>
+            <div id="drlBody">--</div>
+            <div class="acct-actions"><button class="btn-sm" id="drlSave">Save rules</button><span class="muted small" id="drlMsg"></span></div></div>
+        </div>
+        <div class="cc-col">
+          <div class="card"><h3 class="h3row">SMC setup <span class="h3sub" id="smcSub">sweep → BOS/CHoCH → FVG/OB → retest</span></h3>
+            <div id="smcBody">--</div></div>
+          <div class="card"><h3 class="h3row">Master gate <span class="h3sub" id="gateSub">bawat auto signal · machine-readable reason</span></h3>
+            <div id="gateBody">--</div></div>
+        </div>
+      </div>
+      <div class="an-grid">
+        <div class="card"><h3 class="h3row">Risk engine <span class="h3sub" id="rsSub"></span></h3>
+          <div class="sys-form" id="rsForm"></div>
+          <div class="acct-actions"><button class="btn-sm" id="rsSave">Save risk</button><button class="btn-sm ghost" id="rsPeak">Reset peak equity</button>
+            <span class="muted small" id="rsMsg"></span></div></div>
+        <div class="card"><h3 class="h3row">Position manager <span class="h3sub" id="pmSub">isang controller lang ang gumagalaw ng SL · hindi lumuluwag</span></h3>
+          <div class="sys-form" id="pmForm"></div>
+          <div class="acct-actions"><button class="btn-sm" id="pmSave">Save</button><span class="muted small" id="pmMsg"></span></div>
+          <div id="pmStatus"></div></div>
+      </div>
+      <div class="card wide"><h3 class="h3row">Broker / execution monitor <span class="h3sub">bawat account · lot step, stops, freeze, spread, latency</span></h3>
+        <div class="table-wrap"><table class="tbl" id="ccExec"></table></div></div>
+      <div class="an-grid">
+        <div class="card"><h3>Risk bawat account <span class="h3sub">sariling broker day</span></h3><div class="table-wrap"><table class="tbl" id="ccRisk"></table></div></div>
+        <div class="card"><h3 class="h3row">Copier reconciliation <span class="h3sub" id="ccRecSub"></span>
+          <label class="ck small"><input type="checkbox" id="ccAutoRepair"> auto repair</label></h3><div id="ccRec"></div></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-system" hidden>
+      <div class="sys-grid">
+        <div class="card">
+          <h3 class="h3row">Health watchdog <span class="h3sub" id="hwSub">bawat 5 segundo</span></h3>
+          <div id="hwBody">--</div>
+          <p class="muted small">Kapag may problema nang 10 segundo, lalabas ito sa event log at sa Telegram (health). Kusang nire-reconnect ang follower na naputol.</p>
+        </div>
+        <div class="card">
+          <h3 class="h3row">Drift monitor <span class="h3sub">live kumpara sa backtest</span></h3>
+          <div id="drBody">--</div>
+          <div class="sys-form" id="drSet"></div>
+        </div>
+        <div class="card">
+          <h3 class="h3row">Telegram alerts <span class="h3sub" id="tgSub"></span></h3>
+          <div class="sys-form" id="tgForm"></div>
+          <div class="tg-log" id="tgLog"></div>
+        </div>
+        <div class="card">
+          <h3 class="h3row">Error log <span class="h3sub" id="errSub">DATA · PLUGIN · SIGNAL · DECISION · RISK · EXECUTION · BROKER · STATE</span></h3>
+          <div id="errBody">--</div>
+        </div>
+        <div class="card">
+          <h3 class="h3row">Daily report <span class="h3sub" id="eodSub"></span></h3>
+          <div class="acct-actions"><button class="btn-sm ghost" id="eodPrev">Preview</button><button class="btn-sm" id="eodSend">Send now</button></div>
+          <div class="eod-text" id="eodText"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-tape" hidden>
+      <div class="an-grid">
+        <div class="card"><h3>Tape <span class="h3sub">latest ticks</span></h3><div class="tape" id="tape"></div></div>
+        <div class="card"><h3>Recording &amp; connection</h3><div id="conn"></div></div>
+      </div>
+    </section>
+
+    <div class="scrollbtns" id="scrollBtns">
+      <button id="scrUp" title="Scroll up (double-click: top)">▲</button>
+      <button id="scrDown" title="Scroll down (double-click: bottom)">▼</button>
+    </div>
+    <footer class="foot" id="foot">Nothing is traded automatically. Orders are sent only when you ARM trading and click BUY/SELL and confirm.</footer>
+    <div class="modal" id="confirmModal" hidden>
+      <div class="modal-box">
+        <div class="modal-title" id="cTitle">Confirm</div>
+        <div class="modal-body" id="cBody"></div>
+        <div class="modal-btns">
+          <button class="btn-sm ghost" id="cCancel">Cancel</button>
+          <button class="btn-sm" id="cOk">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

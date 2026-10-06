@@ -1,0 +1,56 @@
+{
+  "tf": "M15",
+  "auto_on_start": true,
+  "news_on_start": true,
+  "strategies_only": true,
+  "sources": [
+    "analyser"
+  ],
+  "reversal_confirmed_only": true,
+  "reversal_confirm": "bias",
+  "reversal_min_score": 60,
+  "router": false,
+  "router_trend_labels": [
+    "TREND UP",
+    "TREND DOWN"
+  ],
+  "router_range_labels": [
+    "RANGE"
+  ],
+  "router_trend_rr": 2.0,
+  "router_range_rr": 1.0,
+  "router_range_against_htf": false,
+  "lot": 0.01,
+  "direction": "both",
+  "max_cautions": 0,
+  "min_score": 0.0,
+  "sessions": [
+    "London",
+    "New York",
+    "Asia",
+    "Frankfurt"
+  ],
+  "news_block": true,
+  "max_per_day": 0,
+  "max_open": 3,
+  "max_spread": 0.6,
+  "regimes": [],
+  "no_countertrend": false,
+  "score_confirm": true,
+  "no_opposite": false,
+  "reentry_minutes": 30,
+  "master_mode": true,
+  "reversal": true,
+  "rev_close": [
+    "trend",
+    "pullback",
+    "conso"
+  ],
+  "trend_early_exit": "m15_2bos",
+  "conso_early_exit": "off",
+  "trend_reentry_win": 30,
+  "trend_secure_r": 1.0,
+  "trend_secure_pct": 50.0,
+  "conso_protect": false,
+  "settings_version": 4
+}

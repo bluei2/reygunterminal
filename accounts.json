@@ -1,0 +1,39 @@
+{
+  "master": {
+    "name": "Master",
+    "path": "C:\\Program Files\\Switch Markets MT5\\terminal64.exe",
+    "login": 4009140,
+    "symbol": "",
+    "paper_balance": 10000.0,
+    "daily_dd": 400.0,
+    "dd_mode": "pips",
+    "daily_tp": 60.0,
+    "tp_mode": "$",
+    "close_scope": "all"
+  },
+  "followers": [
+    {
+      "name": "LiteFinance Global LLC #89135371",
+      "path": "C:\\Program Files\\MetaTrader 5\\terminal64.exe",
+      "login": 89135371,
+      "symbol": "XAUUSD_ph",
+      "lot": 0.02,
+      "enabled": true,
+      "paper_balance": 10000.0,
+      "daily_dd": 0.0,
+      "dd_mode": "%",
+      "daily_tp": 0.0,
+      "tp_mode": "%",
+      "close_scope": "all",
+      "id": "b736c1bc"
+    }
+  ],
+  "safety": {},
+  "copy_manual": true,
+  "copy_ea": true,
+  "copy_magics": "",
+  "copy_when_locked": true,
+  "master_dd_pips": 2,
+  "risk_version": 2,
+  "master_preset": 1
+}

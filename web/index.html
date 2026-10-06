@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>REYGUN SuperChart v2.6.5</title>
+<title>REYGUN SuperChart v2.8.26</title>
 <link rel="icon" type="image/svg+xml" href="brand/mark.svg">
 <link rel="stylesheet" href="style.css">
 <script src="lightweight-charts.standalone.production.js"></script>
@@ -17,8 +17,9 @@
         <img src="brand/mark.svg" width="38" height="38" alt="">
       </div>
       <div><div class="b1">REYGUN</div><div class="b2">SUPERCHART</div>
-        <div class="ver-top"><span id="ver" class="ver-tag">v2.6.5</span> <span class="ver-build" id="verBuild">2026-10-01.20</span></div></div>
+        <div class="ver-top"><span id="ver" class="ver-tag">v2.8.26</span> <span class="ver-build" id="verBuild">2026-10-05.26</span></div></div>
     </div>
+    <button class="side-toggle" id="btnSideToggle" title="Ipakita / itago ang pangalan ng menu">☰</button>
 
     <div class="navlabel">WORKSPACE</div>
     <nav id="nav">
@@ -115,7 +116,7 @@
       </div>
       <div class="card kpi">
         <div class="kicon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 15h2"/></svg></div>
-        <div><div class="klabel">Equity</div><div class="kval mono" id="eqVal">--</div><div class="ksub" id="eqSub">--</div></div>
+        <div><div class="klabel" id="eqLabel">Balance</div><div class="kval mono" id="eqVal">--</div><div class="ksub" id="eqSub">--</div></div>
       </div>
     </section>
 
@@ -126,12 +127,15 @@
           <div class="tstrip" id="tStrip">
             <div class="ts-seg" id="tsMode"><button data-mode="manual">✋ MANUAL</button><button data-mode="auto">⚡ AUTO</button></div>
             <span class="ts-chip" id="tsArm" title="LIVE = totoong order · PAPER = simulated"></span>
-            <div class="ts-seg tsprof" id="tsProf"><button data-p="scalp">SCALP</button><button data-p="normal">NORMAL</button><button data-p="aggressive">AGGRESSIVE</button></div>
+            <div class="ts-seg tsprof" id="tsProf"><button data-p="master" title="MASTER = parehong rules ng MT5 RG Master EA v1.90 (TREND + M5 + CVD, PULLBACK RSI 30/70 + OB, CONSO ADX&lt;20) · lahat AUTO · max 3 open">MASTER</button><button data-p="scalp">SCALP</button><button data-p="normal">NORMAL</button><button data-p="aggressive">AGGRESSIVE</button></div>
             <div class="ts-seg tsstrat" id="tsStrat" title="Aling strategy ang papasukan ng AUTO"><span class="ts-lbl">AUTO:</span><button data-stauto="trend" data-lbl="TREND">○ TREND</button><button data-stauto="pullback" data-lbl="PULLBACK">○ PULLBACK</button><button data-stauto="conso" data-lbl="CONSO">○ CONSO</button></div>
             <button class="ts-chip pm" id="tsPm" title="Pag-secure ng profit (Position manager) · i-click para baguhin" hidden>🛡 --</button>
             <button class="ts-chip man" id="tsManual" title="Manual BUY / SELL (may confirm)">BUY / SELL ▾</button>
+            <button class="ts-chip panelbtn" id="tsPanel" title="Ipakita / itago ang STRATEGIES panel sa kanan ng chart">◨ PANEL</button>
             <span class="ts-accts" id="tsAccts"></span>
             <span class="ts-info" id="tsInfo"></span>
+            <div class="ts-why" id="tsWhy" hidden></div>
+            <button class="ts-newsline" id="tsNews" hidden title="Pumunta sa NEWS page"></button>
             <div class="man-pop" id="manPop" hidden></div>
           </div>
           <div class="chart-head">
@@ -144,15 +148,13 @@
                 <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
                 <span>REFRESH</span></button>
               <div class="layers-wrap">
-                <button class="tool" id="btnLayers">
+                <button class="tool" id="btnLayers" title="Layers / indicators">
                   <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>
                   <span id="layersLabel">LAYERS 0/0</span></button>
                 <div class="layers-menu" id="layersMenu" hidden></div>
               </div>
               <div class="tfs" id="tfs"></div>
               <button class="tool" id="btnTrade1" title="Gawing AUTO TRADE timeframe ang TF ng chart na ito">⚡ <span id="trade1Lbl">AUTO TF</span></button>
-              <button class="tool" id="btnSplit" title="Dalawang chart: pumili ng ibang TF sa pangalawa">⧉ <span>2 SCREEN</span></button>
-              <button class="tool" id="btnPop" title="Buksan ang pangalawang chart sa bagong window (para sa 2nd monitor)">↗</button>
             </div>
           </div>
           <div class="charts-row" id="chartsRow">
@@ -331,6 +333,17 @@
           <span class="muted small">Ipapakita ang lahat ng MT5 na bukas sa PC / VPS na ito at kung anong account ang naka-login. Isang click: MASTER o FOLLOWER.</span>
           <div id="mt5List"></div>
         </div>
+        <label class="copyman"><input type="checkbox" id="copyManual" checked> <b>I-COPY din ang MANUAL trades</b>
+          <span class="muted small">— kapag nag-BUY / SELL ka mismo sa master MT5 (PC o phone, symbol ng master), kokopyahin
+          sa lahat ng followers (lot ng follower, parehong SL / TP $ distance). Pati SL / TP move, partial at close sinusundan.
+          Hindi na kailangang i-ARM. Hindi kasama: ibang symbol at trades na bukas na bago binuksan ang app.</span></label>
+        <label class="copyman"><input type="checkbox" id="copyEA" checked> <b>I-COPY din ang trades ng EA sa master</b>
+          <span class="muted small">— LAHAT ng EA sa symbol ng master (default). Para piliin lang ang ilang EA, ilagay ang magic number:
+          <input type="text" id="copyMagics" value="" placeholder="walang laman = lahat (hal. 26200001-26200004)" style="width:230px">.
+          Pareho ng manual: lot ng follower, parehong SL / TP $, sinusundan ang SL move, partial at close. Hindi ginagalaw ang trade ng EA sa master.</span></label>
+        <label class="copyman"><input type="checkbox" id="copyLocked" checked> <b>I-COPY pa rin kahit LOCKED ang master (daily DD / TP)</b>
+          <span class="muted small">— ang EA sa master ay tuloy pa rin kahit naka-lock ang app; kapag ON, susundan pa rin ito ng followers.
+          Ang sariling daily lock ng bawat follower ay masusunod pa rin.</span></label>
         <div id="acctList"></div>
         <div class="conn-test" id="connTest" hidden></div>
         <div class="acct-actions">
@@ -338,6 +351,7 @@
           <button class="btn-sm" id="btnSaveAccts">Save accounts</button>
           <button class="btn-sm ghost" id="btnAutoSym" title="Find the gold symbol on every follower's broker">🔍 Auto-detect symbols</button>
           <button class="btn-sm test" id="btnTestConn" title="Checks every account WITHOUT placing an order">🔌 Test connections</button>
+          <button class="btn-sm test" id="btnSignalTest" title="Sends a REAL test order to every MT5 (BUY LIMIT, minimum lot, 20% below the price - it cannot fill), keeps it 5 s, then deletes it">📡 Test signal</button>
           <span class="muted" id="acctSaved"></span>
         </div>
       </div>
@@ -497,6 +511,12 @@
           </div>
           <div class="heads" id="headList"></div>
         </div>
+      </div>
+      <div class="card wide" id="nrCard">
+        <h3 class="h3row">News results: gaano ka-accurate ang forecast <span class="h3sub">bawat high-impact news habang bukas ang app ·
+          forecast vs actual · galaw ng gold · resulta ng NEWS trades</span></h3>
+        <div id="nrSum" class="nr-sum"></div>
+        <div id="nrList" class="nr-list"></div>
       </div>
       <div class="card wide">
         <h3 class="h3row">News settings <span class="h3sub">saved in news_settings.json</span>

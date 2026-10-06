@@ -227,7 +227,14 @@ class PositionController:
             return
         with tm.lock:
             groups = list(tm.groups.values())
+        at = getattr(self.hub, "autotrader", None)
+        ms = at.settings if at is not None and at.settings.get("master_mode", True) else {}
         for g in groups:
+            if getattr(g, "kind", "superchart") == "copy":
+                continue                           # your manual MT5 trade (copied): its SL is yours, not ours
+            src = getattr(g, "source", "")
+            if src == "st_conso" and ms and not ms.get("conso_protect", False):
+                continue                           # MASTER: CONSO keeps its own SL / TP (Master EA: CSProtect off)
             if g.closing or g.state in ("PROTECTION_PENDING", "CLOSING") or (g.sl_dist and g.state != "PROTECTED"
                                                                              and not all(g.protected.get(x) for x in g.legs)):
                 continue                           # EMERGENCY PROTECTION first (protect()), not us
@@ -241,7 +248,12 @@ class PositionController:
             atr, swing = self._atr_swing(g.side) if s["trail_mode"] in ("atr", "structure") else (None, None)
             broker = getattr(tm.master, "broker", None) or {}
             done = set(getattr(g, "pm_done", []) or [])
-            p = plan(g.side, mp["open"], mp["sl"] or None, price, risk_dist, s, atr, swing, broker, mp["volume"],
+            cfg = s
+            if src == "st_trend" and ms and float(ms.get("trend_secure_r") or 0) > 0 and float(ms.get("trend_secure_pct") or 0) > 0:
+                # MASTER SECURE PROFIT: close part of a TREND trade at +R (then the break-even rule protects the rest)
+                cfg = dict(s, partial_close=sorted(s["partial_close"] + [[float(ms["trend_secure_r"]),
+                                                                         float(ms["trend_secure_pct"]) / 100.0]]))
+            p = plan(g.side, mp["open"], mp["sl"] or None, price, risk_dist, cfg, atr, swing, broker, mp["volume"],
                      broker.get("contract_size") or 100.0, done)
             self.status[g.gid] = dict(p, t=time.time(), sl=mp["sl"], entry=mp["open"])
             g.pm_mode = p["mode"]

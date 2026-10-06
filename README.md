@@ -36,7 +36,9 @@ Alert lang pa rin ang strategies.
 
 **SuperChart trades card:** Set SL/TP (para sa lahat ng account), Break-even, Close 50%, Close, at Close ALL.
 
-**Sync:** Kapag inilipat mo ang SL/TP, nag-partial close, o nagsara sa **master**, susunod ang lahat ng follower, kahit sa MT5 mo ito ginawa. Ang mga trade na binuksan mula sa SuperChart lang ang sinusundan (magic `20260925`, comment `RGSC-xxxxxx`). Hindi ginagalaw ang trades ng mga EA mo.
+**Sync:** Kapag inilipat mo ang SL/TP, nag-partial close, o nagsara sa **master**, susunod ang lahat ng follower, kahit sa MT5 mo ito ginawa. Sinusundan ang mga trade na binuksan mula sa SuperChart (magic `20260925`, comment `RGSC-xxxxxx`).
+
+**Manual trades (v2.7.3):** kapag nag-BUY / SELL ka mismo sa master MT5 (PC o phone, sa symbol ng master), kinokopya ito sa lahat ng followers (fixed lot ng follower, parehong SL / TP $ distance), at sinusundan ang SL / TP move, partial at close. Naka-ON bilang default; checkbox sa Accounts page ("I-COPY din ang MANUAL trades"). Hindi na kailangang i-ARM o pindutin ang terminal (v2.7.4): basta bukas ang app at konektado, kung ano ang gawin mo sa master, gagawin din ng followers. Hindi kinokopya: trades ng ibang EA (magic ≠ 0), ibang symbol, at mga trade na bukas na bago binuksan ang app. Hindi ginagalaw ng position manager (BE / lock / trail) ang SL ng manual trade mo.
 
 **Accounts page:**
 - **Master**: ang MT5 na nagpapakain sa chart. Itakda ang **path ng terminal64.exe**, login # (check), at symbol. Kapag nag-Save, lilipat agad ang chart sa MT5 na iyon, pero hindi ito papayagan habang may bukas na SuperChart trade. Kapag mali ang login #, naka-block ang trading hanggang maayos.
@@ -57,6 +59,15 @@ Alert lang pa rin ang strategies.
 - **Order check ng MT5**: sinusubukan ng MT5 mismo ang isang BUY ng lot mo (margin, volume, permissions) **nang hindi ito ipinapadala**
 - kapag nilagyan mo ng login # ang follower, tinitingnan kung iyon talaga ang naka-login
 Kapag **✓ LAHAT HANDA**, handa na ang master at lahat ng followers para sa manual trade. Kapag may ✗, nakasulat kung ano ang aayusin.
+
+**📡 Test signal** (Accounts page, v2.7.9): patunay na umaabot talaga ang signal ng terminal sa bawat MT5.
+- Nagpapadala ng **TOTOONG order** sa master at bawat follower, sa parehong daan ng tunay na signal:
+  BUY LIMIT, pinakamaliit na lot, **20% baba sa presyo** (hindi mapupuno).
+- Makikita mo ito ng 5 segundo sa **Trade tab ng MT5** bilang `RGSC-TEST`, tapos kusang buburahin.
+- Ipinapakita ang bilis ng pagpapadala (ms) at kung nabura. Kapag may naiwang `RGSC-TEST` (hal. nasara ang app habang nagte-test),
+  kusa itong buburahin ng terminal pagkalipas ng 30 segundo (v2.8.1).
+- **Sarado ang market (weekend)**: "⏸ SARADO ANG MARKET". Umabot sa broker ang order pero tinanggihan (normal); i-test ulit pagbukas.
+- Hindi kailangan ng ARM. Hindi gumagana habang naka-HALT (hindi kailanman nili-clear ng test ang HALT).
 
 **Setup ng follower (isang beses lang):**
 1. Mag-install ng **hiwalay na MT5** para sa bawat follower sa sariling folder, hal. `C:\MT5_Switch1\`. Isang terminal = isang account.
@@ -84,7 +95,7 @@ Bawat BUY/SELL mula sa SuperChart ay naka-record sa `journal.jsonl` (live) o `jo
 - Kailangan ng internet. Kapag walang internet, ipinapakita ang huling na-save (`news_cache.json`). Para patayin ang news: `--no-news`.
 
 ## Auto trade (ON/OFF), mula sa signals sa chart
-Card na **AUTO TRADE** sa kanan (sa ilalim ng TRADE card). **Laging OFF pagbukas ng app.** Kailangang **naka-ARM**, at may confirm bago mag-ON. Kusa itong mag-o-OFF kapag nag-DISARM.
+Card na **AUTO TRADE** sa kanan (sa ilalim ng TRADE card). **Mula v2.6.7: naka-ON na pagbukas ng app** ("AUTO ON pagbukas ng app" sa AUTO settings; i-uncheck para MANUAL pagbukas). Kusa itong mag-o-OFF kapag nag-DISARM.
 - Kinukuha ang **parehong signals na nakikita mo sa chart**: **Analyser Signals** (default), at kung gusto mo, pati **Conso Breakout Signals**. Kailangang naka-ON sa LAYERS ang plugin.
 - Magte-trade lang sa **bar na kasasara lang**. Hindi nito kukunin ang mga lumang arrow, at hindi ito uulit sa parehong signal.
 - **SL/TP = SL at TP ng signal** (itakda sa ⚙ ng Analyser Signals: atr/swing/vwap/ob at rr/vwap/atr…). Ipinapadala bilang $ distance mula sa fill ng bawat account, kaya sabay sa master at sa lahat ng followers, gaya ng manual entry.
@@ -279,7 +290,7 @@ Lahat ng `.py` sa `plugins\` ay auto-load pag-start. Press `p` para i-on/off (na
 | `prev_day_levels.py` | Indicator | PDH / PDL / PDC |
 | `smc_overlay.py` | Indicator | SH/SL, B/C/x markers, FVG zones |
 | `premium_discount.py` | Indicator | H1 premium/discount zones + EQ · idinadagdag ang location sa score |
-| `sessions.py` | Indicator | Asia / London / New York boxes (UTC hours, editable at the top of the file) |
+| `sessions.py` | Indicator | Asia / Frankfurt / London / New York boxes (UTC hours; Frankfurt 06-14 UTC = 2-10 PM Manila) |
 | `period_separator.py` | Indicator | vertical line per day (M1-H1), week (H4), month (D1) |
 | `ema_cross.py` | Strategy | sample: M5 EMA cross + H1 filter |
 | `smc_ready_alert.py` | Strategy | alert kapag READY ang analyser |
@@ -502,13 +513,41 @@ order**. Hindi rin nito binabago ang score, ang TF settings, ang AUTO TRADE o an
   - "kulang pa (n/30)" = wala pang 30 triggered ang setup, kaya **huwag pang husgahan**.
   - Forecast lang ito: walang order, walang epekto sa score, sa gate at sa AUTO TRADE.
 
+## v2.8.0: MASTER (pareho ng MT5 Master EA v1.90) - default na
+Kapag NORMAL ang strategies mo, kusa itong magiging **MASTER** pagbukas ng v2.8.0 (isang beses lang). AGGRESSIVE / SCALP /
+CUSTOM ay hindi ginagalaw (may **MASTER** button na rin sa profiles).
+
+**Strategies (M15):**
+- **TREND**: H4 BOS (huling 12 H4 bars) + 2 M15 BOS + hindi overbought/oversold (RSI 70/30) + **M5 structure kasabay** +
+  **CVD** (tumataas ang CVD sa huling 8 M15 bars para sa BUY, bumababa para sa SELL; delta ng bawat M5 bar =
+  tick volume × (close − open) / (high − low)). SL sa huling swing, TP 1:2.
+- **PULLBACK**: EMA trend + RSI ≤ 30 (BUY) / ≥ 70 (SELL) sa huling 6 bars + order block na hindi na-break. TP 1:2.
+- **CONSO**: ADX < 20 → BUY STOP / SELL STOP grid (2 levels, $1.5 pagitan, buffer $0.5, max SL $8, TP 1:2, expiry 8 bars). AUTO na ulit.
+
+**AUTO TRADE → MASTER settings:**
+- **Bawat strategy may sariling trade**: puwedeng sabay ang TREND, PULLBACK at CONSO (kahit magkasalungat). Isang trade lang bawat strategy.
+- Max **3** bukas, **walang limit** kada araw. Ang araw ay hinihinto ng **daily loss $20 / profit target $60** ng master account
+  (Accounts; inilagay lang kung wala ka pang sariling limit).
+- **Reversal close**: bagong TREND signal = isinasara ang mga lumang TREND / PULLBACK / CONSO trade na kontra dito, at kinakansela ang
+  CONSO stop orders sa kabilang side.
+- **Early exit (m15_2bos)**: isinasara ang TREND trade bago mag-TP kapag ang ika-2 M15 BOS (huling 32 bars) ay kontra dito.
+- **Re-entry pagkatapos manalo**: kapag nanalo ang huling TREND trade at iyon pa rin ang huling H4 break, puwedeng pumasok ulit
+  hanggang 30 H4 bars ang edad ng break (karaniwang 12).
+- **Secure 50% sa 1R** (TREND): kalahati ang isinasara sa +1R, tapos break-even. Hindi mahahati ang 0.01 lot: buo itong mananatili
+  (hindi kailanman magiging full close ang partial).
+- **CONSO**: walang break-even / lock (gaya ng EA).
+- "Bawal ang kontrang trade" ay naka-OFF na (kasama ang manual), dahil magkakaiba ang strategy at ang reversal na ang nagsasara.
+
+**Chart:** bagong **Delta Profile (buy vs sell)** sa LAYERS → VOLUME (naka-ON): volume profile na hati sa BUY (berde) at SELL (pula)
+bawat presyo, may delta number bawat row, ΔPOC, at sa itaas: BUY % / SELL %, sino ang mas agresibo, at sino ang tumutulak sa huling 25%.
+
 ## STRATEGIES (Trading → STRATEGIES card): Trend · Pullback · Low Volume Grid
 Bawat strategy ay may **sariling set ng indicator conditions** (✓ / ✗ live sa huling sarado na bar ng AUTO TF),
 sariling **passing %**, RR at SL. 🔒 = required. Naka-OFF lahat sa AUTO hanggang i-check mo ang **AUTO** ng
 strategy (may confirm).
 | Strategy | Kailan | Ano ang ginagawa |
 |---|---|---|
-| **TREND** | **2 BOS sa M15 🔒 + 1 BOS sa H4 🔒** sa parehong direksyon (mula sa totoong M15 / H4 bars, kahit anong AUTO TF) | **market entry sa direksyon ng trend** (default 1:2, SL 1.5×ATR) kapag **bago** itong nag-align (hindi bawat bar) |
+| **TREND** | **2 BOS sa M15 🔒 + 1 BOS sa H4 🔒** sa parehong direksyon (mula sa totoong M15 / H4 bars, kahit anong AUTO TF) | **market entry sa direksyon ng trend** (default 1:2, SL sa **huling swing** +0.1 ATR, 0.5–4 ATR; o 1.5×ATR) kapag **bago** itong nag-align (hindi bawat bar) |
 | **PULLBACK** (on/off) | may trend + RSI/Stoch umabot sa oversold/overbought kontra sa trend + bumabalik 🔒 | market entry sa direksyon ng trend (1:1.5). **Hindi papasok kapag VOLATILE** (ATR percentile ≥ 85) |
 | **CONSOLIDATION** | **score 1-2-3: mahinang volume (1) 🔒 + ADX < 20 (2) 🔒 + box (3) 🔒**, tahimik nang min. 4 kandila | **pending orders sa paligid ng box:** BUY STOP sa itaas, SELL STOP sa ibaba, nandoon na bago mag-break. **Na-hit ang isa = cancel ang kabila (OCO)**, kanselado pagkatapos ng `expiry_bars` |
 | **NEWS** | high-impact news | NEWS TRADE card (isara ang open trades + BUY/SELL STOP) |

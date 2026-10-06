@@ -41,8 +41,8 @@ from sources import DemoSource, MT5Source, Recorder, ReplaySource
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
-VERSION = "2.6.5"        # REYGUN SuperChart version (see CHANGELOG.md)
-BUILD = "2026-10-01.20"          # must match BUILD in web/app.js; the UI warns when the running server is older
+VERSION = "2.8.26"        # REYGUN SuperChart version (see CHANGELOG.md)
+BUILD = "2026-10-05.26"          # must match BUILD in web/app.js; the UI warns when the running server is older
 STRUCT_TFS = ["H4", "H1", "M15", "M5"]
 HIST_WINDOW = 600          # bars per TF the history / backtest analyser sees (live MT5 loads ~500)
 CHART_TFS = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
@@ -74,7 +74,8 @@ def zone_color(hex_color: str) -> str:
     return f"rgba({r},{g},{b},0.16)"
 
 
-DEFAULT_SESSIONS = [("ASIA", 0, 8, "#60a5fa"), ("LONDON", 7, 16, "#fbbf24"), ("NEW YORK", 12, 21, "#f472b6")]
+DEFAULT_SESSIONS = [("ASIA", 0, 8, "#60a5fa"), ("LONDON", 7, 16, "#fbbf24"), ("NEW YORK", 12, 21, "#f472b6"),
+                    ("FRANKFURT", 6, 14, "#34d399")]
 
 
 def session_table(plugins):
@@ -189,6 +190,7 @@ class Hub:
         self.trader = None
         self.news = None
         self.newstrader = None
+        self.news_results = None
         self.intermarket = None
         self.orderflow = None
         self.autotrader = None
@@ -813,7 +815,10 @@ class Hub:
                     out["profiles"].append(dict(rows=[[lo, hi, v] for lo, hi, v in pf.rows], color=web_color(pf.color),
                                                 highlight=list(pf.highlight), hcolor=web_color(pf.highlight_color),
                                                 width=pf.width_pct, t_from=getattr(pf, "t_from", None),
-                                                t_to=getattr(pf, "t_to", None)))
+                                                t_to=getattr(pf, "t_to", None),
+                                                buy=[round(x, 3) for x in pf.buy] if getattr(pf, "buy", None) else None,
+                                                scolor=web_color(getattr(pf, "sell_color", "#ef4444")),
+                                                title=getattr(pf, "title", "") or ""))
                 for sg in getattr(ov, "signals", []) or []:
                     if sg.get("t", 0) >= first_t:
                         out["signals"].append(dict(sg, source=p.name))
@@ -906,12 +911,18 @@ def make_handler(hub: Hub):
             pass
 
         def _send(self, code, body: bytes, ctype="application/json"):
-            self.send_response(code)
+            try:
+                self.send_response(code)
+            except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                return
             self.send_header("Content-Type", ctype)
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.end_headers()
+                self.wfile.write(body)
+            except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                pass        # the page / window closed the request first (reload, tab switch): harmless, no log spam
 
         def _json(self, obj, code=200):
             self._send(code, json.dumps(obj, separators=(",", ":")).encode())
@@ -957,6 +968,8 @@ def make_handler(hub: Hub):
                                                               max(5, min(60, int(q.get("n", ["20"])[0])))))
                 if u.path == "/api/intermarket":
                     return self._json(hub.intermarket.view() if hub.intermarket else {"disabled": True})
+                if u.path == "/api/news/results":
+                    return self._json(hub.news_results.view() if hub.news_results else {"disabled": True})
                 if u.path == "/api/news":
                     return self._json(hub.news.view() if hub.news else {"disabled": True})
                 if u.path in ("/api/decision", "/api/decision/why", "/api/setup", "/api/tradeplan"):
@@ -1177,6 +1190,9 @@ def make_handler(hub: Hub):
                 if u.path.endswith("run"):
                     return self._json(hub.backtest.start(body))
                 return self._json(hub.backtest.apply(body.get("setup") or {}))
+            elif u.path == "/api/auto/start":
+                at = hub.autotrader                      # the user's confirm: trading ON + AUTO ON together
+                return self._json(at.start() if at else {"ok": False, "error": "trading not available"})
             elif u.path in ("/api/auto/enable", "/api/auto/settings"):
                 at = hub.autotrader
                 if not at:
@@ -1249,7 +1265,7 @@ def make_handler(hub: Hub):
                 at = getattr(hub, "autotrader", None)
                 tf = stm.PROFILES[name]["auto_tf"]
                 if at is not None:
-                    at.update_settings({"tf": tf})
+                    at.update_settings(dict(stm.PROFILES[name].get("autotrade") or {}, tf=tf))
                 pm = getattr(hub, "positions_mgr", None)
                 if pm is not None:                       # profit protection that fits this profile's TP (RR)
                     pm.update_settings(dict(stm.PROFILES[name]["protect"]))
@@ -1393,6 +1409,8 @@ def trade_api(hub, path, b):
             return t.find_symbols(b.get("id", "master"), b.get("base") or None)
         if act == "test":
             return t.test_connections(float(b.get("lot") or 0.01))
+        if act == "signaltest":
+            return t.signal_test(float(b.get("hold") if b.get("hold") is not None else 5.0))
         if act == "plan":
             return dict(ok=True, plan=t.entry_plan(float(b.get("lot") or 0)))
         return dict(ok=False, error="unknown action")
@@ -1558,6 +1576,8 @@ def main(argv=None):
         from news import NewsFeed
         hub.news = NewsFeed()
         print("News reader: ForexFactory calendar + RSS headlines (background)")
+        from news_results import NewsResults
+        hub.news_results = NewsResults(hub)
         if hub.trader:
             from news_trader import NewsTrader
             hub.newstrader = NewsTrader(hub.trader)
@@ -1575,6 +1595,16 @@ def main(argv=None):
         if back:
             hub.note("warn", "RESUMED after an unexpected stop: " + ", ".join(back))
             print("RESUMED after an unexpected stop: " + ", ".join(back))
+    if hub.trader and hub.autotrader and hub.autotrader.settings.get("auto_on_start") and \
+            not hub.autotrader.enabled and not getattr(a, "no_trading", False):
+        r = hub.autotrader.start("AUTO ON pagbukas")
+        msg = "AUTO ON pagbukas ng app (setting)" if r.get("ok") else f"AUTO ON pagbukas FAILED: {r.get('error')}"
+        nt = getattr(hub, "newstrader", None)
+        if r.get("ok") and nt is not None and hub.autotrader.settings.get("news_on_start", True) and not nt.enabled:
+            rn = nt.set_enabled(True)
+            msg += " · NEWS TRADE ON" if rn.get("ok") else f" · NEWS TRADE hindi na-ON: {rn.get('error')}"
+        hub.note("warn", msg)
+        print(msg)
     runstate.start_writer(hub)
     url = f"http://127.0.0.1:{a.port}/"
     print(f"REYGUN SUPERCHART v{VERSION} (build {BUILD})  |  {src.name} {src.symbol}  |  {url}")

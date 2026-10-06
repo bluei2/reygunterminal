@@ -231,6 +231,12 @@ class MasterGate:
                 if k == "trigger" and sig["source"] != "analyser":
                     continue                     # a breakout / trend-line signal is itself the structure trigger
                 own = sig["source"] == "reversal" or str(sig["source"]).startswith("st_")
+                if str(sig["source"]).startswith("st_") and k != "htf":
+                    # STRATEGIES (Eugene: "pag lahat ng na-set sa strategy nag-green, trade na agad"): the strategy's
+                    # own conditions are the setup. The analyser's required list (and regime extras such as
+                    # BREAKOUT -> displacement) does not apply; the HTF bias still does on NORMAL (HTF filter ON).
+                    # Risk, news, session, execution and the structure conflict stay hard blockers.
+                    continue
                 if k in waive and k != "htf" and own:
                     continue                     # reversal arrow / strategy: its own trigger / score
                 if k == "score" and kind == "auto":
@@ -253,7 +259,12 @@ class MasterGate:
         blockers = []
         if risk is not None:
             try:
-                blockers += risk.hard_blockers(side, kind, lot, sl_d, tp_d)
+                cap = None
+                if sig["source"] in ("st_conso", "st_trend", "st_pullback"):   # own risk % per strategy (0 = off)
+                    import strategies as _st
+                    nm = sig["source"][3:]
+                    cap = float(_st.load_settings().get(nm, {}).get("max_risk_pct", 0.0))
+                blockers += risk.hard_blockers(side, kind, lot, sl_d, tp_d, risk_pct_cap=cap)
             except Exception as e:
                 fail("RISK", "BLOCKED_RISK", f"risk engine failed: {e.__class__.__name__}: {e}", "risk")
                 hub.note("error", f"gate: risk engine failed: {e}", category="RISK_ERROR")

@@ -840,3 +840,204 @@ WAITING → TRIGGERED → RUNNING → TP_HIT / SL_HIT / EXPIRED, or WAITING → 
 - **Tests (+2):** 236 passed, 0 failed.
 - **Not reproduced here:** why Eugene's server stopped. His screenshot still showed v2.6.2. `crash_log.txt` will
   hold the reason next time.
+
+### v2.6.6: one-step AUTO start with reasons + optional AUTO on start (Eugene, 2026-10-01: "naka-ilang ON na ako, ayaw mag-AUTO")
+- **Root cause not reproduced:** in demo the old flow (arm, then enable) worked. On Eugene's VPS the reason was
+  silent: arm / enable failures were only shown in some paths.
+- **`AutoTrader.start()`:** arms (unless HALTED), enables, and returns can_trade / warning.
+  - The UI shows every failure.
+  - It re-checks after 4 s and shows the last AUTO log line if AUTO went off again.
+- **`auto_on_start`:** user setting, default False; applied after start-up (not with `--resume`, which has its own
+  restore).
+- **Load:** `/api/strategies` costs about 0.1 s on 2000 bars, so it is not the reason AUTO stays off.
+- **Tests (+1):** 237 passed, 0 failed.
+
+### v2.6.7: AUTO on start ON by default (Eugene, 2026-10-01: "on mo na as default, ang hirap i-ON at laging na-disconnect")
+- **This changes the original "AUTO is OFF at start" rule, at the owner's explicit request.**
+  - `autotrade.DEFAULTS.auto_on_start = True`.
+  - `SETTINGS_VERSION` 2: older files get True once; a file saved by v2.6.7 with False keeps False.
+- **Unchanged:**
+  - Only strategies set to ● AUTO trade, and only when all their conditions are green.
+  - Gates: risk, session, news, max trades, spread.
+  - A HALT is never cleared; read-only mode never trades.
+- **Tests (+1):** 238 passed, 0 failed.
+
+### v2.7.0: order flow in the strategies + Buyers vs Sellers on the chart (Eugene, 2026-10-02)
+- **`strategies._orderflow()` / `of_pressure()`:**
+  - Per strategy bar (buy, sell) from `orderflow.CURRENT.bar_stats(tf)` (MT5 ticks, tick rule).
+  - Without tick data (backtest) the conditions are not met.
+- **New conditions:** `of_buyers` (trend), `of_turn` (pullback), `of_balanced` (conso). All OFF by default; settings
+  of_bars / of_min.
+- **Chart:** `plugins/flow_strength.py` (FlowStrength, default ON) marks side changes at ±15%. `/api/strategies` adds
+  `orderflow.pressure`.
+- **Server:** `_send()` swallows ConnectionAborted / Reset / BrokenPipe (WinError 10053 spam in Eugene's console when
+  the page aborts a poll).
+- **Demo:** synthetic ticks are balanced (±10%), so no markers appear there; covered by tests with injected flow.
+- **Tests (+2):** 240 passed, 0 failed.
+
+### v2.7.1: order flow ON per strategy (Eugene, 2026-10-02: "i-ON mo na lang … i-designate ang gamit ng order flow sa bawat strategy")
+- **Requirement:** `OF_KEY` (trend `of_buyers`, pullback `of_turn`, conso `of_balanced`) is required by default and
+  in all profiles.
+- **SCHEMA 6:** appends the key to an older `required` list; the rest is kept. Conso conditions now reset only from
+  schema < 4.
+- **No tick data:** the condition passes ("not judged") and the card says so.
+- **Status:** `/api/strategies` → `strategies[n].of` → one line per card.
+- **Tests (+1, 7 updated):** 241 passed, 0 failed.
+
+### v2.7.2: all ON at start + follower skip reasons (Eugene, 2026-10-02)
+- **All ON:**
+  - Strategy DEFAULTS auto=True; SCHEMA 7 sets auto once for older files.
+  - `autotrade.news_on_start` (default True): after `auto_on_start`, `newstrader.set_enabled(True)`.
+- **Follower:**
+  - `TradeManager.follower_skip_reason()` replaces the silent filter in `open()` and in `news_trader._accounts()`.
+  - Every reason is noted (event log) and stamped (journal lifecycle).
+  - A paused follower (reconciliation) previously skipped every trade without a word; that is the most likely cause
+    of "master traded, follower did not".
+- **Strip:** chips show the follower state; PAUSED → `/api/reconciliation/resume`, LOCKED → `/api/trade/unlock`.
+- **Tests (+2):** 243 passed, 0 failed.
+
+### v2.7.3: copy manual master trades (Eugene, 2026-10-02)
+- **Config:** `copy_manual` (default True) in `accounts.json`; kept by `load_config` / `update_config`; Accounts page
+  checkbox.
+- **Read:** when on, the master reads ALL positions; `master.positions` = magic `MAGIC`, `master.manual` = magic 0 on
+  the master symbol. `Account.pos()` also searches `manual`, so sync() / reconciliation find the master leg.
+- **Copier:** `TradeManager.copy_manual()` runs each loop before `sync()`. The first read marks open trades as seen
+  (not copied). A new manual ticket becomes a `Group(kind="copy")`; follower legs are opened with
+  `follower_skip_reason()`, comment `RGSC-<gid>`; journal kind `manual_mt5`.
+- **Position manager:** skips `kind == "copy"` groups.
+- **PaperBackend:** positions keep their own magic (a test can add a manual one); `magic_only` / symbol filters as
+  in mt5_ops.
+- **Tests (+6, `test_copy_manual.py`):** copy + close mirrored, SL move + partial mirrored, EA / other symbol /
+  pre-existing ignored, switch off / SuperChart trade not double-copied, not armed = not copied.
+
+### v2.7.4: manual copy without arming (Eugene, 2026-10-02)
+- `copy_manual()` no longer calls `can_trade()` (armed / Algo Trading on the master are irrelevant: the trade is
+  already open on the master). Only a LOCKED master stops it. `sync()` already ran without arming.
+- **Tests:** `test_copied_even_when_not_armed`, `test_locked_master_not_copied` (replaces not-armed test).
+
+### v2.7.5: Frankfurt session + why the strategies did not trade (Eugene, 2026-10-03)
+- **Data:** XAUUSD M5, 2026-03-26 .. 2026-09-25, from the getdata-finance free sample on GitHub. Resampled to M15 / H4.
+  Order flow is not judged offline (no ticks), so the counts below are an upper bound.
+- **Strategy frequency (NORMAL, M15):**
+  - TREND: 6.8 signals / week, 37% win at 1:2, +22R over 6 months.
+  - CONSO: about 21 pending plans / week.
+  - PULLBACK: **0 signals in 6 months.** RSI ≤ 40, MFI ≤ 20, doji and OB never line up together in an uptrend
+    (all four together: 0 bars; RSI + MFI: 22 bars).
+  - Looser pullback variants still lose. RSI + OB + order flow alone: 1.9 / week, 44% win, +5R. Not applied; it is
+    the user's call.
+- **Paper replay of Sep 15-25 through the real app** (patched to sim time, `news_unknown=allow`). TREND traded
+  twice. It was blocked by:
+  - session (London / NY only),
+  - `required: Displacement` (regime BREAKOUT) → fixed,
+  - max open 1.
+- **Live risk:** with the default `news_unknown=block`, a calendar that has not loaded for 12 h blocks every AUTO
+  trade (BLOCKED_NEWS / NEWS_UNKNOWN).
+- **Gate:** `trade_gate`: for `st_*` sources every decision `missing_required` except `htf` is skipped.
+- **Sessions:** "Frankfurt" [6, 14] UTC in market_hours, the chart plugin (frankfurt_start / _end), superchart
+  defaults, analytics and the AUTO sessions checkboxes.
+- **Tests (+1, 1 updated):** strategy trade not blocked by the analyser list (still blocked against the HTF bias);
+  06 UTC = FRANKFURT.
+
+### v2.7.6: CONSO manual, more sessions; RANGE strategy test (Eugene, 2026-10-03)
+- **Migrations:**
+  - strategies SCHEMA 8: `conso.auto=False` once (DEFAULTS too).
+  - autotrade SETTINGS_VERSION 3: "Asia" + "Frankfurt" appended once to a saved non-empty sessions list.
+  - Default sessions: Asia / Frankfurt / London / New York.
+- **Session test of TREND (NORMAL, M15), by entry time:**
+
+  | Hours (PH) | Trades | Win | R |
+  |---|---|---|---|
+  | 5 AM – 2 PM (Asia) | 64 | 39% | +11 |
+  | 2 – 3 PM (Frankfurt only) | 10 | 50% | +5 |
+  | 3 – 8 PM | 33 | 27% | −6 |
+  | 8 – 10 PM | 21 | 33% | 0 |
+  | 10 PM – 12 MN | 17 | 47% | +7 |
+  | 12 MN – 5 AM | 34 | 38% | +5 |
+
+  CONSO OCO lost in every bucket.
+- **RANGE (2 equal tops + 2 equal bottoms, TP at the other side) prototype:**
+  - Box from `conso.detect`, scaled to ATR (tol 0.3 ATR, size 1.5-6 ATR). Spread $0.25 per trade.
+  - SL 10 pips ($1): M5 9% win, -$91; M15 2% win, -$98. A $1 stop is inside gold's noise (M5 ATR about $5,
+    M15 about $9).
+  - Best: M15 limit at the edges with SL 1 ATR: 105 trades, 31% win, +$61 per 0.01 lot. Also M15
+    close-back-inside + ADX < 20 with SL 1 ATR: 37 trades, 51% win, +$58.
+  - Not built yet: waiting for Eugene's choice of SL.
+- **Tests (+1, 2 updated):** CONSO manual once / kept when switched back; sessions migration once.
+
+### v2.7.7: TREND SL at the last swing (Eugene, 2026-10-03)
+- **Rule:**
+  - `strategies.last_swing(bars, i, d)` finds the latest confirmed pivot (3 bars each side) in the last 60 bars,
+    below the close (BUY) or above it (SELL).
+  - SL distance = |close − swing| + 0.1 ATR, clamped to 0.5–4 ATR.
+  - Settings `sl_mode` ("swing" | "atr"), `swing_buf`, `swing_min`, `swing_max`.
+- **Profiles and migration:** NORMAL uses swing; AGGRESSIVE / SCALP use atr. SCHEMA 9 sets swing once for a
+  NORMAL file.
+- **Test (179 signals, Mar–Sep 2026):**
+
+  | Setup | Win | R |
+  |---|---|---|
+  | ATR SL, TP 2R | 37% | +22 |
+  | ATR SL, TP 3R | 29% | +29 |
+  | ATR SL, TP 4R | 24% | +36 |
+  | Swing SL, TP 2R | 36% | +16 (+25.7 with NORMAL protection, DD 10R) |
+  | Swing SL, TP 2.5R | 33% | +25 |
+  | Swing SL, TP 3R | 25% | +2 |
+
+  The average swing SL is about $29 against $14 for the ATR SL.
+- Eugene chose swing SL + TP 2R. The NORMAL protection stays as it is.
+- **Tests (+2):** swing finder and migration; SL inside 0.5–4 ATR.
+
+### v2.7.8: refinement with a train / test split (Eugene, 2026-10-03)
+- **Method:** XAUUSD M5, 2026-03-26 .. 09-25 (getdata-finance sample).
+  - Strategy bars M15; exits walked on M5 (SL first inside one M5 bar). Spread $0.25 per trade.
+  - TRAIN = before 2026-07-01, TEST = after. Settings are picked on TRAIN; only configs positive in BOTH halves
+    are kept, ranked by the worse half's expectancy.
+- **TREND** (grid: BOS min 1/2, H4 window 30/12, filters, SL swing/ATR, RR 1.5/2/3, market vs retest, protection).
+  - Recurring winners: H4 window 12 and the `not_extreme` KONTRA.
+  - Chosen (Eugene's swing SL, 2R, NORMAL protection): TRAIN 101 tr +25.2R, TEST 81 tr +28.2R, DD 10.6R.
+  - Retest-and-hold entries had too few trades (58) and were weak on TRAIN.
+- **PULLBACK** (2880 configs; 846 positive in both halves, which says the EMA-trend pullback has a general edge).
+  - Chosen to keep Eugene's idea (RSI + OB): RR 2, own SL, NORMAL protection. TRAIN 26 tr +9.1R, TEST 24 tr +8.4R,
+    DD 3.6R.
+  - Alternative: turn + Bollinger touch, RR 2: TRAIN +14.1R, TEST +12.0R.
+- **RANGE** (288 configs, 45 positive in both halves, so the edge is thin).
+  - Chosen: M15 LIMIT, SL 1.5 ATR, TP at the middle of the range. TRAIN 62 tr +9.3R, TEST 59 tr +10.4R, 60% win.
+  - No M5 config survived.
+- **Verification:** the terminal's own `signals()` with the new NORMAL reproduce the lab numbers exactly
+  (TREND 182 tr +53.4R, PULLBACK 50 tr +17.5R).
+- **Migration:** SCHEMA 10 (NORMAL, once): trend `h4_window` 30 → 12, `not_extreme` required; pullback drops
+  `mfi` / `doji`, rr 1.5 → 2.
+- **Tests:** a `legacy()` helper keeps the rule tests written for the old defaults; +1 migration test.
+- **Caveat:** order flow is not judged offline, and 6 months is a short sample.
+
+### v2.7.9: Test signal - terminal to MT5 connectivity (Eugene, 2026-10-04)
+- `mt5_ops.signal_test_send` / `signal_test_remove`: a never-filling BUY LIMIT (min lot, 80% of bid, magic 20260925,
+  comment RGSC-TEST), checked with orders_get, then deleted and checked gone. Retcodes are explained (10018 market closed,
+  10027 Algo Trading OFF, 10026 server disabled, ...).
+- `TradeManager.signal_test(hold)`: all accounts in parallel; the hold happens between the two calls, outside the
+  MT5 / worker locks. Refused while halted. Paper backend simulates it.
+- API `/api/trade/signaltest`; UI button "📡 Test signal" with a confirm dialog.
+- Tests: `tests/test_signal_test.py` (5).
+
+### v2.8.0: MASTER in the terminal + CVD + delta profile (Eugene, 2026-10-04)
+- `strategies.py`: TREND conditions `m5_struct` (latest M5 BOS = direction; not judged without M5 bars) and `cvd`
+  (`cvd_change`: prefix sums over the M5 bars, bisect on bar close times - no look-ahead). Profile `master`
+  (+ `autotrade` overrides), `master_settings()`, `migrate_to_master()` (NORMAL only, once via AUTO TRADE v4).
+- `autotrade.py`: settings v4 (M15, max_open 3, max_per_day 0, no_opposite off, master_mode). `_consider`: own-trade
+  rule for strategy sources; `_reversal`, `_early_exit`, `_trend_cfg` / `_last_trend_win` (re-entry after a win,
+  from the journal `strategy` field). Orders carry `meta.strategy`.
+- `trading.py`: `Group.source`; master daily $20 / $60 once (`master_preset`); partial-close guard (lot step / min lot).
+- `news_trader.py`: CONSO fills tagged `st_conso`; `cancel_strategy_side`, `strategy_box_live`.
+- `position_manager.py`: TREND secure partial; CONSO skipped when conso_protect is off.
+- `plugins/delta_profile.py`, Profile split drawing in `web/app.js`; AUTO TRADE MASTER block in the UI; TREND editor fields.
+
+### v2.8.1: leftover test order sweep (Eugene, 2026-10-05)
+- `TradeManager._sweep_test_orders`: on every refresh, any `RGSC-TEST` pending order older than 30 s is cancelled
+  (paused while `signal_test` runs). Test: `test_leftover_test_order_is_swept`.
+
+### v2.8.1: copy every master trade + leftover test order sweep (Eugene, 2026-10-05)
+- `trading.py`: `copy_ea` (default on) + `copy_magics` ranges (`parse_magics`, empty = all); `_copyable(magic)`
+  decides which master positions the copier follows (manual 0 with copy_manual, EA magics with copy_ea, never ours).
+- `TradeManager._sweep_test_orders`: an `RGSC-TEST` order pending > 30 s is cancelled (not during a running test).
+- Tests: `test_copy_manual.py` (+4), `test_signal_test.test_leftover_test_order_is_swept`.
+

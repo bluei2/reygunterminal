@@ -1,0 +1,152 @@
+2026-10-01 09:09:06.496: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-01 09:09:06.496: [INFO] Profiles total count: 1
+2026-10-01 09:09:06.496: [INFO] Profile: name=Profile 1 path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-01T09:09:06.456Z
+2026-10-01 09:09:06.496: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-01 09:09:06.496: [INFO] MostRecentlyActiveProfile: name=Profile 1 path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-01T09:09:06.456Z
+2026-10-01 09:09:06.496: [INFO] OnDoneLoading sync enabled: 0
+2026-10-01 09:09:06.496: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-01 09:09:06.496: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-01 09:09:06.496: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-01 09:09:06.497: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-10-01 09:09:12.112: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-10-01 09:09:12.125: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-10-01 09:09:12.142: [INFO] Primary account changed.
+2026-10-01 09:09:12.142: [INFO] OnPrimaryAccountChanged PrimaryAccountChangeEvent::Type::kSet
+2026-10-01 09:09:12.151: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-10-01 09:09:12.152: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-10-01 12:57:19.588: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-01 13:00:52.495: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-01 13:00:52.495: [INFO] Profiles total count: 1
+2026-10-01 13:00:52.498: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-01T13:00:52.425Z
+2026-10-01 13:00:52.498: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-01 13:00:52.498: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-01T13:00:52.425Z
+2026-10-01 13:00:52.498: [INFO] OnDoneLoading sync enabled: 0
+2026-10-01 13:00:52.498: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-01 13:00:52.498: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-01 13:00:52.498: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-01 13:16:14.797: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-01 13:16:32.069: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-01 13:16:32.069: [INFO] Profiles total count: 1
+2026-10-01 13:16:32.069: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-01T13:16:32.018Z
+2026-10-01 13:16:32.069: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-01 13:16:32.069: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-01T13:16:32.018Z
+2026-10-01 13:16:32.069: [INFO] OnDoneLoading sync enabled: 0
+2026-10-01 13:16:32.069: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-01 13:16:32.069: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-01 13:16:32.069: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-01 13:59:06.346: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-01 14:15:07.050: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-01 14:15:07.050: [INFO] Profiles total count: 1
+2026-10-01 14:15:07.050: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-01T14:15:06.988Z
+2026-10-01 14:15:07.050: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-01 14:15:07.050: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-01T14:15:06.988Z
+2026-10-01 14:15:07.050: [INFO] OnDoneLoading sync enabled: 0
+2026-10-01 14:15:07.050: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-01 14:15:07.050: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-01 14:15:07.050: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-01 18:26:27.499: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-02 00:22:54.925: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-02 00:22:54.925: [INFO] Profiles total count: 1
+2026-10-02 00:22:54.927: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-02T00:22:54.011Z
+2026-10-02 00:22:54.927: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-02 00:22:54.927: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-02T00:22:54.011Z
+2026-10-02 00:22:54.927: [INFO] OnDoneLoading sync enabled: 0
+2026-10-02 00:22:54.927: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-02 00:22:54.927: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-02 00:22:54.927: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-02 04:28:27.014: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-02 04:28:27.014: [INFO] Profiles total count: 1
+2026-10-02 04:28:27.017: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-02T04:28:26.956Z
+2026-10-02 04:28:27.017: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-02 04:28:27.017: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-02T04:28:26.956Z
+2026-10-02 04:28:27.017: [INFO] OnDoneLoading sync enabled: 0
+2026-10-02 04:28:27.017: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-02 04:28:27.017: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-02 04:28:27.017: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-03 15:42:36.010: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-04 23:24:53.199: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-04 23:24:53.199: [INFO] Profiles total count: 1
+2026-10-04 23:24:53.201: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-04T23:24:53.171Z
+2026-10-04 23:24:53.201: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-04 23:24:53.201: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-04T23:24:53.171Z
+2026-10-04 23:24:53.201: [INFO] OnDoneLoading sync enabled: 0
+2026-10-04 23:24:53.201: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-04 23:24:53.201: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-04 23:24:53.201: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-05 12:53:10.465: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-05 12:59:19.229: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-05 12:59:19.229: [INFO] Profiles total count: 1
+2026-10-05 12:59:19.235: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-05T12:59:19.162Z
+2026-10-05 12:59:19.235: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-05 12:59:19.236: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-05T12:59:19.162Z
+2026-10-05 12:59:19.236: [INFO] OnDoneLoading sync enabled: 0
+2026-10-05 12:59:19.236: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-05 12:59:19.236: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-05 12:59:19.236: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-05 15:28:18.038: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-05 15:28:18.038: [INFO] Profiles total count: 1
+2026-10-05 15:28:18.042: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-05T15:28:17.937Z
+2026-10-05 15:28:18.042: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-05 15:28:18.042: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-05T15:28:17.937Z
+2026-10-05 15:28:18.042: [INFO] OnDoneLoading sync enabled: 0
+2026-10-05 15:28:18.042: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-05 15:28:18.042: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-05 15:28:18.042: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-05 23:29:37.659: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-05 23:40:24.047: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-05 23:40:24.047: [INFO] Profiles total count: 1
+2026-10-05 23:40:24.049: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-05T23:40:24.004Z
+2026-10-05 23:40:24.049: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-05 23:40:24.049: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-05T23:40:24.004Z
+2026-10-05 23:40:24.049: [INFO] OnDoneLoading sync enabled: 0
+2026-10-05 23:40:24.049: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-05 23:40:24.049: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-05 23:40:24.049: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-05 23:47:17.781: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-05 23:51:49.751: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-05 23:51:49.751: [INFO] Profiles total count: 1
+2026-10-05 23:51:49.753: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-05T23:51:49.704Z
+2026-10-05 23:51:49.753: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-05 23:51:49.753: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-05T23:51:49.704Z
+2026-10-05 23:51:49.754: [INFO] OnDoneLoading sync enabled: 0
+2026-10-05 23:51:49.754: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-05 23:51:49.754: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-05 23:51:49.754: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-05 23:59:59.524: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-06 00:03:13.994: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-06 00:03:13.994: [INFO] Profiles total count: 1
+2026-10-06 00:03:13.995: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-06T00:03:13.959Z
+2026-10-06 00:03:13.995: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-06 00:03:13.995: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-06T00:03:13.959Z
+2026-10-06 00:03:13.995: [INFO] OnDoneLoading sync enabled: 0
+2026-10-06 00:03:13.995: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-06 00:03:13.995: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-06 00:03:13.995: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-06 02:39:24.303: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-06 02:43:03.714: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-06 02:43:03.714: [INFO] Profiles total count: 1
+2026-10-06 02:43:03.723: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-06T02:43:03.673Z
+2026-10-06 02:43:03.723: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-06 02:43:03.723: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-06T02:43:03.673Z
+2026-10-06 02:43:03.723: [INFO] OnDoneLoading sync enabled: 0
+2026-10-06 02:43:03.723: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-06 02:43:03.723: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-06 02:43:03.723: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-06 09:13:28.724: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-06 09:13:28.724: [INFO] Profiles total count: 1
+2026-10-06 09:13:28.727: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-06T09:13:26.995Z
+2026-10-06 09:13:28.727: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-06 09:13:28.727: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-06T09:13:26.995Z
+2026-10-06 09:13:28.727: [INFO] OnDoneLoading sync enabled: 0
+2026-10-06 09:13:28.727: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-06 09:13:28.727: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-06 09:13:28.727: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-06 11:39:38.147: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-06 11:39:38.147: [INFO] Profiles total count: 1
+2026-10-06 11:39:38.660: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-06T11:39:38.006Z
+2026-10-06 11:39:38.660: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-06 11:39:38.660: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-06T11:39:38.006Z
+2026-10-06 11:39:38.660: [INFO] OnDoneLoading sync enabled: 0
+2026-10-06 11:39:38.660: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-06 11:39:38.660: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-06 11:39:38.660: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1

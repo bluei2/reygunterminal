@@ -1,4 +1,4 @@
-REYGUN SUPERCHART v2.6.5 - PAANO MAG-INSTALL / MAG-UPDATE   (build 2026-10-01.20)
+REYGUN SUPERCHART v2.8.1 - PAANO MAG-INSTALL / MAG-UPDATE   (build 2026-10-05.1)
 
 BAGONG PC (unang beses)
   1. I-install ang Python 3.11+ (python.org) - i-check ang "Add python.exe to PATH".
@@ -21,7 +21,7 @@ MAG-UPDATE (may luma nang folder)
   4. Buksan ulit gamit ang run_superchart_live.bat.
 
 PAANO MALALAMAN NA BAGO ANG TUMATAKBO
-  - "v2.6.5" sa itaas ng sidebar (sa ilalim ng logo) (at sa title ng window), may "Trading" menu (⚡), "%" ang score (hindi "2/9").
+  - "v2.8.1" sa itaas ng sidebar (sa ilalim ng logo) (at sa title ng window), may "Trading" menu (⚡), "%" ang score (hindi "2/9").
   - WALANG pulang banner na "Luma pa ang tumatakbong terminal".
   - Kung "READ-ONLY" ang nasa itaas ng sidebar (sa ilalim ng logo): run_superchart_readonly.bat ang nabuksan -> gamitin ang
     run_superchart_live.bat (o paper) para lumabas ang Trading, Accounts, Journal, Backtest, atbp.
@@ -30,10 +30,15 @@ PAGKATAPOS BUKSAN
   - Buksan muna at mag-login ang LAHAT ng MT5 (master + followers), naka-ON ang Algo Trading.
   - Accounts -> "🔍 Hanapin ang bukas na MT5" -> "Gamitin bilang MASTER" (LiteFinance) at "+ FOLLOWER"
     sa iba -> i-check ang lot / symbol -> Save accounts -> "🔌 Test connections".
+  - "📡 Test signal" (bukas ang market): totoong test order sa bawat MT5 (hindi mapupuno), makikita ng 5 s bilang
+    RGSC-TEST sa Trade tab, tapos buburahin. Kapag ✓ lahat = may connectivity ang terminal at ang bawat MT5.
+  - v2.8.1: pagbukas, kusang MASTER ang setup (pareho ng MT5 Master EA: TREND + M5 + CVD, PULLBACK 30/70, CONSO AUTO,
+    bawat strategy may sariling trade, max 3 bukas, daily loss $20 / target $60 sa master). Makikita sa event log.
+    HUWAG sabay patakbuhin ang AUTO ng terminal at ang Master EA sa IISANG account (dodoble ang trades).
   - Trading -> STRATEGIES: i-check ang gusto mong strategy -> Save strategies.
   - LAYERS (sa chart): i-CHART ang Strategy · TREND / PULLBACK / CONSOLIDATION para makita sa chart.
     Ang STRATEGIES card sa kanan ng Market Overview ay laging nakikita (x/3, BOS, news countdown).
-  - Sa itaas ng chart: ⚡ AUTO -> confirm (wala nang hiwalay na ARM). Laging OFF ang AUTO pagbukas ng app.
+  - Sa itaas ng chart: ⚡ AUTO -> confirm (wala nang hiwalay na ARM). Naka-ON na ang AUTO pagbukas ng app (default; i-uncheck ang "AUTO ON pagbukas ng app" sa Trading -> AUTO TRADE settings kung ayaw mo).
   - I-click ang MANUAL sa tabi ng strategy (sa kanan) para i-AUTO ang strategy na iyon.
 
 KUNG NAG-DISCONNECT / NAG-CRASH

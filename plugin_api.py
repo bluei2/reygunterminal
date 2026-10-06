@@ -87,6 +87,10 @@ class Profile:
     width_pct: float = 0.22                          # max width as a share of the chart width (or of its time span)
     t_from: Optional[int] = None                     # optional: draw inside [t_from, t_to] (bar times), e.g. one day;
     t_to: Optional[int] = None                       # None = on the right edge of the chart
+    buy: Optional[list] = None                       # optional: BUY volume per row -> drawn split buy / sell with
+                                                     # the delta of each row (delta profile); sell = row - buy
+    sell_color: str = "#ef4444"
+    title: str = ""                                  # optional text drawn at the top of the profile
 
 
 @dataclass

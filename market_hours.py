@@ -9,7 +9,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SESSIONS_FILE = os.path.join(HERE, "session_settings.json")
 # Session hours in UTC (never broker time, never local PC time). Broker bar times are converted with the
 # detected server offset (utc_from_server) before they are compared with these hours.
-DEFAULT_SESSIONS = {"Asia": [0, 9], "London": [7, 16], "New York": [12, 21]}
+# Frankfurt (Eugene, 2026-10-03): the first European market, 1 h before London (14:00-22:00 Manila)
+DEFAULT_SESSIONS = {"Asia": [0, 9], "London": [7, 16], "New York": [12, 21], "Frankfurt": [6, 14]}
 
 
 def _clean_sessions(raw):
@@ -60,22 +61,25 @@ def session_name(now_utc: datetime) -> str:
     london = in_session("London", h)
     ny = in_session("New York", h)
     asia = in_session("Asia", h)
+    fra = in_session("Frankfurt", h)
     if london and ny:
         return "London / New York overlap"
     if london:
         return "London session"
     if ny:
         return "New York session"
+    if fra:
+        return "Frankfurt session"           # the hour before London opens
     if asia:
         return "Asia session"
     return "Off-session"
 
 
 def session_code(now_utc: datetime) -> str:
-    """Short code for analytics / fingerprints: LONDON, NEW_YORK, OVERLAP, ASIA, OFF, WEEKEND."""
+    """Short code for analytics / fingerprints: LONDON, NEW_YORK, OVERLAP, FRANKFURT, ASIA, OFF, WEEKEND."""
     n = session_name(now_utc)
     return {"London / New York overlap": "OVERLAP", "London session": "LONDON", "New York session": "NEW_YORK",
-            "Asia session": "ASIA", "Off-session": "OFF", "Weekend": "WEEKEND"}[n]
+            "Frankfurt session": "FRANKFURT", "Asia session": "ASIA", "Off-session": "OFF", "Weekend": "WEEKEND"}[n]
 
 
 def utc_from_server(t_server: int, utc_offset_h: int) -> datetime:

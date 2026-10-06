@@ -365,6 +365,74 @@ def connection_check(mt5, symbol, lot=0.01) -> dict:
     return out
 
 
+# ---------------------------------------------------------------- signal test (a REAL order that can never fill)
+TEST_COMMENT = COMMENT_PREFIX + "TEST"
+RET_TEXT = {10004: "requote", 10006: "rejected", 10013: "invalid request", 10014: "invalid volume",
+            10015: "invalid price", 10016: "invalid stops", 10017: "trading disabled on this symbol/account",
+            10018: "MARKET CLOSED", 10019: "not enough money", 10024: "too many requests",
+            10026: "auto trading disabled by the SERVER (broker)", 10027: "Algo Trading button is OFF in this MT5",
+            10031: "no connection to the trade server", 10033: "pending order limit reached"}
+
+
+def signal_test_send(mt5, symbol) -> dict:
+    """SIGNAL TEST step 1 (Eugene 2026-10-04: "test signal ... para malaman kung may connectivity nga"): a REAL order
+    through the same order_send route as every signal - a BUY LIMIT of the minimum lot at 80% of the price, so it
+    can NEVER fill. Checks that MT5 shows it. Step 2 (signal_test_remove) deletes it; the wait in between is done by
+    the caller, outside the MT5 lock. Only this one ticket is ever touched."""
+    out = dict(ok=False, checks=[], market_closed=False)
+
+    def add(name, ok, detail):
+        out["checks"].append(dict(name=name, ok=bool(ok), detail=str(detail)))
+        return ok
+
+    a = mt5.account_info()
+    if not add("Account", a is not None, f"#{a.login} {a.server}" if a else f"no account {mt5.last_error()}"):
+        return out
+    out.update(login=a.login, server=a.server)
+    if not add("Symbol", mt5.symbol_select(symbol, True), symbol):
+        return out
+    info = mt5.symbol_info(symbol)
+    tick = mt5.symbol_info_tick(symbol)
+    if not add("Price", info is not None and tick is not None and tick.bid > 0,
+               f"bid {tick.bid} ask {tick.ask}" if tick else "no tick"):
+        return out
+    vol = normalize_volume(info, info.volume_min or 0.01)
+    price = round(tick.bid * 0.80, info.digits)
+    req = dict(action=mt5.TRADE_ACTION_PENDING, symbol=symbol, volume=vol, type=mt5.ORDER_TYPE_BUY_LIMIT,
+               price=price, sl=0.0, tp=0.0, deviation=50, magic=MAGIC, comment=TEST_COMMENT,
+               type_time=mt5.ORDER_TIME_GTC)
+    t0 = time.perf_counter()
+    res = _send(mt5, info, req)
+    ms = round((time.perf_counter() - t0) * 1000, 1)
+    out["ms_send"] = ms
+    if res is None or res.retcode not in RETCODE_OK:
+        code = getattr(res, "retcode", None)
+        out["market_closed"] = code == 10018
+        add("Send test order", False, (f"retcode {code} {RET_TEXT.get(code, '')} "
+                                       f"{getattr(res, 'comment', '') if res is not None else mt5.last_error()}").strip()
+            + (" - umabot sa broker ang order; pagbukas ng market, i-test ulit" if code == 10018 else ""))
+        return out
+    ticket = int(res.order)
+    out["ticket"] = ticket
+    add("Send test order", True, f"BUY LIMIT {vol} @ {price} (hindi mapupuno) · ticket #{ticket} · {ms} ms")
+    seen = mt5.orders_get(ticket=ticket)
+    add("Visible in MT5", bool(seen), f"nasa Trade tab: {TEST_COMMENT}" if seen else "not found in orders_get")
+    out["ok"] = all(c["ok"] for c in out["checks"])
+    return out
+
+
+def signal_test_remove(mt5, ticket) -> dict:
+    """SIGNAL TEST step 2: delete the test order and check it is gone."""
+    t1 = time.perf_counter()
+    rr = mt5.order_send(dict(action=mt5.TRADE_ACTION_REMOVE, order=int(ticket), magic=MAGIC))
+    ms = round((time.perf_counter() - t1) * 1000, 1)
+    cancelled = rr is not None and rr.retcode in RETCODE_OK
+    gone = not mt5.orders_get(ticket=int(ticket))
+    ok = cancelled and gone
+    return dict(ok=ok, ms=ms, check=dict(name="Delete test order", ok=ok, detail=f"deleted · {ms} ms" if ok else
+                f"retcode {getattr(rr, 'retcode', '?')} - BURAHIN MANO-MANO ang {TEST_COMMENT} #{ticket} sa MT5"))
+
+
 # ---------------------------------------------------------------- symbol finder (prefix / suffix per broker)
 import re as _re
 

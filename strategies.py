@@ -42,8 +42,11 @@ CATALOG = {
         ("bos", "Bagong BOS sa direksyon sa AUTO TF (huling 3 bars)", False),
         ("rsi_side", "RSI sa tamang panig ng 50 (BUY > 50 / SELL < 50)", False),
         ("ema200", "Presyo sa tamang panig ng EMA200", False),
-        ("not_extreme", "KONTRA: hindi overbought (BUY: RSI < rsi_hi) / hindi oversold (SELL: RSI > rsi_lo)", False),
+        ("of_buyers", "ORDER FLOW: mas malakas ang buyers (BUY) / sellers (SELL): delta ng huling of_bars ≥ of_min % ng volume", True),
+        ("not_extreme", "KONTRA: hindi overbought (BUY: RSI < rsi_hi) / hindi oversold (SELL: RSI > rsi_lo)", True),
         ("no_ob_block", "KONTRA: walang order block (ob_tf) na nakaharang sa daan; kapag na-break ito, tuloy ang entry", False),
+        ("m5_struct", "M5 STRUCTURE: ang huling M5 BOS ay nasa direksyon (walang BUY habang pababa pa ang M5)", False),
+        ("cvd", "CVD: tumataas ang CVD (BUY) / bumababa (SELL) - delta ng M5 bars sa huling cvd_bars kandila (cvd_mode turn2: huling 2)", False),
     ],
     "pullback": [
         ("rsi", "RSI umabot sa ≤ os (uptrend) / ≥ ob (downtrend) sa huling 6 bars", True),
@@ -51,10 +54,12 @@ CATALOG = {
         ("cci", "CCI ≤ −100 / ≥ 100", False),
         ("wpr", "Williams %R ≤ −80 / ≥ −20", False),
         ("near_ema", "Presyo malapit sa EMA20 / EMA50 (≤ 0.6 ATR)", False),
-        ("mfi", "MFI ≤ mfi_os (uptrend) / ≥ mfi_ob (downtrend) sa huling 6 bars", True),
-        ("doji", "Doji sa dulo ng dip (body ≤ doji_body ng range, huling 2 bars)", True),
-        ("ob", "Order block sa ob_tf (M15) na tinamaan ng pullback at HINDI na-break: SELL = umakyat sa bearish OB sa taas, BUY = bumaba sa bullish OB sa ilalim", True),
+        ("mfi", "MFI ≤ mfi_os (uptrend) / ≥ mfi_ob (downtrend) sa huling 6 bars", False),
+        ("doji", "Doji sa dulo ng dip (body ≤ doji_body ng range, huling 2 bars)", False),
+        ("ob", "Order block sa ob_tf (M15) na tinamaan ng pullback at HINDI na-break: SELL = umakyat sa bearish OB sa taas, BUY = bumaba sa bullish OB sa ilalim", False),
+        ("ob_spike", "Order block O biglang spike: may OB (gaya sa itaas) O mabilis na galaw na ≥ spike_atr × ATR sa huling 6 bars papunta sa extreme", True),
         ("turn", "Bumabalik na: RSI tumawid pabalik sa os/ob o Stoch sa 20/80", False),
+        ("of_turn", "ORDER FLOW: pumasok na ang buyers (BUY) / sellers (SELL) sa dulo ng pullback: delta ng huling 2 bars sa direksyon", True),
         ("bb_touch", "Tumama sa Bollinger band (BUY lower / SELL upper) sa huling 6 bars", False),
         ("engulf", "Engulfing candle sa direksyon ng trade (bar na ito o nauna)", False),
     ],
@@ -64,6 +69,7 @@ CATALOG = {
         ("box", "May consolidation box (2 tops + 2 bottoms)", False),
         ("squeeze", "Bollinger squeeze (BB width sa pinakamababang 30%)", False),
         ("atr_low", "ATR percentile ≤ 50 (tahimik)", False),
+        ("of_balanced", "ORDER FLOW: balanse ang buyers at sellers (|delta| < of_min % ng volume) = totoong consolidation", True),
         ("rsi_mid", "RSI nasa gitna (40–60): walang direksyon", False),
         ("inside_bb", "Presyo nasa loob ng Bollinger bands (huling quiet_bars kandila)", False),
     ],
@@ -73,58 +79,83 @@ CATALOG = {
 # PULLBACK (Eugene, 2026-10-01): uptrend + oversold + MFI + doji -> BUY (mirror for SELL)
 # PULLBACK (Eugene, 2026-10-01): + order block. CONSO: ADX < 20 + low volume for at least 4 candles in a row
 # TREND (Eugene, 2026-10-01): 2 BOS on M15 + 1 BOS on H4 in the same direction. CONSO: volume + ADX + box (3)
-REQUIRED = {"trend": ["bos_m15", "bos_h4"], "pullback": ["rsi", "mfi", "doji", "ob"],
-            "conso": ["adx_low"]}
+# v2.7.8 refine (Eugene, 2026-10-03; picked on Mar-Jun 2026, checked on Jul-Sep): TREND + KONTRA not_extreme,
+# PULLBACK = RSI + order block (+ order flow) - MFI + doji together never fired
+REQUIRED = {"trend": ["bos_m15", "bos_h4", "of_buyers", "not_extreme"], "pullback": ["rsi", "ob_spike", "of_turn"],
+            "conso": ["adx_low", "of_balanced"]}
+# ORDER FLOW per strategy (Eugene, 2026-10-02: "i-ON mo na"): what order flow must say for each strategy
+OF_KEY = {"trend": "of_buyers", "pullback": "of_turn", "conso": "of_balanced"}
 # CONSO (Eugene, 2026-10-01): "matagal bumaba ang ADX below 20" -> ADX < 20 alone places the pending orders
 # 100% (Eugene, 2026-10-01): "per strategy na tayo": a strategy enters only when EVERY condition you checked is met
-SCHEMA = 5      # saved settings older than this get the new conditions / required lists (other values are kept)
+SCHEMA = 16      # saved settings older than this get the new conditions / required lists (other values are kept)
 MTF_TFS = {"M5": 300, "M15": 900, "H1": 3600, "H4": 14400}     # timeframes the TREND break-of-structure rule can use
 
 DEFAULTS = {
-    "trend": dict(auto=False, min_pct=100.0, rr=2.0, sl_atr=1.5, adx_min=22.0, cooldown=8,
-                  bos_ltf="M15", bos_htf="H4", bos_m15_min=2, bos_window=32, h4_window=30,
-                  rsi_hi=70.0, rsi_lo=30.0, ob_tf="M15", ob_block_atr=1.5),
-    "pullback": dict(auto=False, min_pct=100.0, rr=1.5, sl_atr=1.2, os=40.0, ob=60.0, block_volatile=True,
-                     vol_pct=85.0, cooldown=6, mfi_os=20.0, mfi_ob=80.0, doji_body=0.15, ob_near=0.3, ob_tf="M15"),
-    "conso": dict(auto=False, min_pct=100.0, rr=2.0, buffer=0.5, max_sl=8.0, expiry_bars=8, adx_max=20.0, quiet_bars=1,
+    "trend": dict(auto=True, max_risk_pct=0.0, max_sl=20.0, min_pct=100.0, rr=2.0, sl_atr=1.5, sl_mode="swing", swing_buf=0.1, swing_min=0.5, swing_max=4.0, adx_min=22.0, cooldown=8,
+                  bos_ltf="M15", bos_htf="H4", bos_m15_min=2, bos_window=32, h4_window=12,
+                  rsi_hi=70.0, rsi_lo=30.0, ob_tf="M15", ob_block_atr=1.5, of_bars=3, of_min=15.0,
+                  m5_window=32, cvd_mode="slope8", cvd_bars=8),
+    "pullback": dict(auto=True, any_dir=True, spike_atr=3.0, max_risk_pct=0.0, max_sl=20.0, min_pct=100.0, rr=2.0, sl_atr=1.2, os=40.0, ob=60.0, block_volatile=False,
+                     vol_pct=85.0, cooldown=6, mfi_os=20.0, mfi_ob=80.0, doji_body=0.15, ob_near=0.3, ob_tf="M15", of_min=10.0),
+    "conso": dict(auto=False, no_expiry=True, max_risk_pct=0.0, min_pct=100.0, of_bars=5, of_min=15.0, rr=2.0, buffer=0.5, max_sl=8.0, expiry_bars=8, adx_max=20.0, quiet_bars=1,
                   vol_pct=35.0, range_bars=12, levels=2, step=1.5,
                   lookback=48, swing=2, min_touches=2, tol_pips=5.0, pip=0.10, min_bars=8, max_range=10.0,
                   min_range=0.5),
 }
 
 
-_P4 = ["rsi", "mfi", "doji", "ob"]
+_P4 = ["rsi", "mfi", "doji", "ob", "of_turn"]
 # PROFILES (Eugene, 2026-10-01): NORMAL / AGGRESSIVE / SCALP presets for all three strategies + the AUTO TF.
 # Applying one never switches anything ON (the AUTO flags of the strategies and AUTO TRADE stay as they are).
 PROFILES = {
+    # MASTER (Eugene, 2026-10-04: "ilagay mo na ang master sa terminal"): the same rules as the MT5 Master EA v1.90
+    # (preset CVD) - TREND: H4 BOS + 2 M15 BOS + not overbought/oversold + M5 structure + CVD, swing SL, 1:2;
+    # PULLBACK RSI 30/70 + OB; CONSO ADX < 20 grid. Each strategy its own trade, reversal close, early exit,
+    # re-entry after a win and secure 50% at 1R are the AUTO TRADE "MASTER" settings (autotrade.py).
+    "master": dict(
+        title="MASTER", auto_tf="M15", htf_filter=False,
+        autotrade=dict(master_mode=True, max_open=3, max_per_day=0, no_opposite=False, reversal=True,
+                       trend_early_exit="m15_2bos", trend_reentry_win=30, trend_secure_r=1.0, trend_secure_pct=50.0,
+                       conso_protect=False),
+        protect=dict(be_r=1.0, be_offset=0.20, profit_lock=[[1.5, 0.5], [1.8, 1.0]]),
+        desc="Pareho ng MT5 Master EA v1.90 (CVD): TREND H4 + 2 M15 BOS + M5 structure + CVD, SL sa swing 1:2; "
+             "PULLBACK RSI 30/70 + OB; CONSO ADX<20 grid. Bawat strategy may sariling trade + reversal close.",
+        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=2, bos_window=32, h4_window=12, rr=2.0, sl_atr=1.5, sl_mode="swing",
+                   cooldown=8, rsi_hi=70.0, rsi_lo=30.0, m5_window=32, cvd_mode="slope8", cvd_bars=8,
+                   conditions=["bos_m15", "bos_h4", "not_extreme", "m5_struct", "cvd"]),
+        pullback=dict(os=30.0, ob=70.0, mfi_os=20.0, mfi_ob=80.0, rr=2.0, sl_atr=1.2, cooldown=6, vol_pct=85.0,
+                      ob_near=0.3, conditions=["rsi", "ob_spike"]),
+        conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=2.0, levels=2, step=1.5, buffer=0.5, expiry_bars=8,
+                   max_sl=8.0, range_bars=12, max_range=0.0, conditions=["adx_low"])),
     "normal": dict(
         title="NORMAL", auto_tf="M15", htf_filter=True,
         protect=dict(be_r=1.0, be_offset=0.20, profit_lock=[[1.5, 0.5], [1.8, 1.0]]),   # TP 1:2
-        desc="Kumpleto ang kondisyon, M15 entry / H4 trend, 1:2. Mas kaunti pero mas malinis na trades.",
-        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=2, bos_window=32, h4_window=30, rr=2.0, sl_atr=1.5,
-                   cooldown=8, conditions=["bos_m15", "bos_h4"]),
-        pullback=dict(os=40.0, ob=60.0, mfi_os=20.0, mfi_ob=80.0, rr=1.5, sl_atr=1.2, cooldown=6, conditions=_P4),
+        desc="M15 entry / sariwang H4 trend (12 bars), TREND 1:2 SL sa huling swing + hindi overbought/oversold, PULLBACK RSI + OB 1:2.",
+        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=2, bos_window=32, h4_window=12, rr=2.0, sl_atr=1.5, sl_mode="swing",
+                   cooldown=8, conditions=["bos_m15", "bos_h4", "of_buyers", "not_extreme"]),
+        pullback=dict(os=40.0, ob=60.0, mfi_os=20.0, mfi_ob=80.0, rr=2.0, sl_atr=1.2, cooldown=6,
+                      conditions=["rsi", "ob", "of_turn"]),
         conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=2.0, levels=2, step=1.5, expiry_bars=8, max_sl=8.0, range_bars=12,
-                   max_range=0.0, conditions=["adx_low"])),
+                   max_range=0.0, conditions=["adx_low", "of_balanced"])),
     "aggressive": dict(
         title="AGGRESSIVE", auto_tf="M15", htf_filter=False,
         protect=dict(be_r=1.0, be_offset=0.20, profit_lock=[[1.25, 0.5]]),                # TP 1:1.5
         desc="Mas maluwag: 1 BOS sa M15 + H4 BOS, pullback walang doji, 1:1.5. Mas maraming trade.",
-        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=1, bos_window=32, h4_window=30, rr=1.5, sl_atr=1.2,
-                   cooldown=4, conditions=["bos_m15", "bos_h4"]),
+        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=1, bos_window=32, h4_window=30, rr=1.5, sl_atr=1.2, sl_mode="atr",
+                   cooldown=4, conditions=["bos_m15", "bos_h4", "of_buyers"]),
         pullback=dict(os=45.0, ob=55.0, mfi_os=30.0, mfi_ob=70.0, rr=1.5, sl_atr=1.2, cooldown=4,
-                      conditions=["rsi", "mfi", "ob"]),
+                      conditions=["rsi", "mfi", "ob", "of_turn"]),
         conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=1.5, levels=2, step=1.0, expiry_bars=8, max_sl=8.0, range_bars=12,
-                   max_range=0.0, conditions=["adx_low"])),
+                   max_range=0.0, conditions=["adx_low", "of_balanced"])),
     "scalp": dict(
         title="SCALP", auto_tf="M5", htf_filter=False,
         protect=dict(be_r=0.6, be_offset=0.10, profit_lock=[[0.8, 0.3]]),                 # TP 1:1: before the TP
         desc="Mabilis: M5 entry (2 BOS sa M5 + 1 BOS sa H1), maliit na SL, 1:1, maikling expiry.",
-        trend=dict(bos_ltf="M5", bos_htf="H1", bos_m15_min=2, bos_window=36, h4_window=24, rr=1.0, sl_atr=1.0,
-                   cooldown=4, conditions=["bos_m15", "bos_h4"]),
+        trend=dict(bos_ltf="M5", bos_htf="H1", bos_m15_min=2, bos_window=36, h4_window=24, rr=1.0, sl_atr=1.0, sl_mode="atr",
+                   cooldown=4, conditions=["bos_m15", "bos_h4", "of_buyers"]),
         pullback=dict(os=35.0, ob=65.0, mfi_os=20.0, mfi_ob=80.0, rr=1.0, sl_atr=1.0, cooldown=3, conditions=_P4),
         conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=1.0, levels=1, step=1.0, expiry_bars=6, max_sl=4.0, range_bars=12,
-                   max_range=0.0, conditions=["adx_low"])),
+                   max_range=0.0, conditions=["adx_low", "of_balanced"])),
 }
 
 
@@ -163,7 +194,7 @@ def clean_settings(raw):
             for k in ("quiet_bars", "adx_max", "range_bars", "max_range"):   # v2.4: ADX < 20 right away
                 new.pop(k, None)
         if old_schema < SCHEMA and (n == "trend" and old_schema < 2 or n == "pullback" and old_schema < 3
-                                    or n == "conso"):
+                                    or n == "conso" and old_schema < 4):
             new.pop("conditions", None)                          # the rules changed: start from the new set
             new.pop("required", None)
         cur = s[n]
@@ -181,6 +212,50 @@ def clean_settings(raw):
                     cur["conditions"][k] = bool(new["conditions"][k])
         if isinstance(new.get("required"), list):
             cur["required"] = [k for k in new["required"] if k in cur["conditions"]]
+        if old_schema < 7:
+            cur["auto"] = True                                   # v2.7.2: every strategy on AUTO (Eugene: "i-ON mo lahat")
+        if old_schema < 10 and (raw or {}).get("profile", "normal") == "normal":
+            # v2.7.8 refine (once, NORMAL): TREND fresh H4 trend + not overbought/oversold; PULLBACK RSI + OB, 1:2
+            if n == "trend":
+                if cur["h4_window"] == 30:
+                    cur["h4_window"] = 12
+                if "not_extreme" not in cur["required"]:
+                    cur["required"].append("not_extreme")
+            if n == "pullback":
+                cur["required"] = [k for k in cur["required"] if k not in ("mfi", "doji")]
+                cur["conditions"]["mfi"] = cur["conditions"]["doji"] = False
+                if abs(cur["rr"] - 1.5) < 1e-9:
+                    cur["rr"] = 2.0
+        if old_schema < 9 and n == "trend" and (raw or {}).get("profile", "normal") == "normal":
+            cur["sl_mode"] = "swing"                             # v2.7.7: TREND SL at the last swing (NORMAL, once)
+        if n == "trend" and cur["sl_mode"] not in ("swing", "atr"):
+            cur["sl_mode"] = "swing"
+        if n == "trend" and cur["cvd_mode"] not in ("slope8", "turn2"):
+            cur["cvd_mode"] = "slope8"
+        if n == "trend":
+            cur["cvd_bars"] = max(2, min(50, int(cur["cvd_bars"])))
+        if old_schema < 8 and n == "conso":
+            cur["auto"] = False                                  # v2.7.6: CONSO to MANUAL (6-month test: -130R)
+        if old_schema < 12 and n == "conso":
+            cur["auto"] = True                                   # v2.8.3 (Eugene): CONSO laging AUTO
+        if old_schema < 13 and n == "conso":
+            cur["max_risk_pct"] = 0.0                            # v2.8.14 (Eugene): walang risk-per-trade sa CONSO
+        if old_schema < 16 and n in ("trend", "pullback"):
+            # v2.8.23 (Eugene: "max tayo sa SL na $20 or 200 pips"): no % risk block for TREND / PULLBACK; the stop is
+            # capped at a $20 price distance (200 gold pips) instead
+            cur["max_risk_pct"], cur["max_sl"] = 0.0, 20.0
+        if old_schema < 15 and n == "pullback":
+            # v2.8.21 (Eugene: "khit walang OB, pero kung may OB mas ok"): OB OR a sudden spike
+            if cur.get("conditions", {}).get("ob"):
+                cur["conditions"]["ob"], cur["conditions"]["ob_spike"] = False, True
+            if "ob" in cur.get("required", []):
+                cur["required"] = ["ob_spike" if k == "ob" else k for k in cur["required"]]
+        if old_schema < 14 and n == "pullback":
+            # v2.8.18 (Eugene: "alisin ang htf sa pullback... para sa biglang spike, sell at buy man"): both
+            # directions (oversold -> BUY, overbought -> SELL), and no VOLATILE block (a spike is volatile)
+            cur["any_dir"], cur["block_volatile"] = True, False
+        if old_schema < 6 and OF_KEY[n] not in cur["required"]:
+            cur["required"].append(OF_KEY[n])                    # v2.7.1: order flow ON in every strategy
         for k in cur["required"]:
             cur["conditions"][k] = True                          # a required condition is always ON
         cur["min_pct"] = 100.0                                    # every checked condition must be met
@@ -201,6 +276,24 @@ def clean_settings(raw):
     s["htf_filter"] = bool(raw.get("htf_filter", True))
     s["schema"] = SCHEMA
     return s
+
+
+def master_settings(cur=None):
+    """The MASTER setup (the MT5 Master EA rules) on top of cur, with EVERY strategy on AUTO (CONSO too)."""
+    m = apply_profile(cur if cur is not None else clean_settings(None), "master")
+    for n in NAMES:
+        m[n]["auto"] = True
+    return m
+
+
+def migrate_to_master(path=None):
+    """v2.8.0 (Eugene, 2026-10-04: "ilagay mo na ang master sa terminal"), ONCE (called by AUTO TRADE's v4 settings
+    migration): a NORMAL setup becomes MASTER. AGGRESSIVE / SCALP / CUSTOM are left as they are. -> True if changed."""
+    cur = load_settings(path)
+    if cur.get("profile", "normal") != "normal":
+        return False
+    save_settings(master_settings(cur), path)
+    return True
 
 
 def load_settings(path=None):
@@ -465,8 +558,42 @@ def series(bars, mtf=None):
     S["obs"] = exits.order_blocks(bars)
     S["mtf"], sec = _mtf(bars, mtf)
     S["sec"] = sec
+    S["of"] = _orderflow(bars, sec)
     S["t_close"] = [b.t + sec for b in bars]
+    S["cvd"] = _cvd_prefix(bars, S)
     return S
+
+
+def _delta(b):
+    """Estimated volume delta of one bar (same formula as the MT5 Master EA / REYGUN_CVD):
+    tick volume x (close - open) / (high - low)."""
+    rg = b.h - b.l
+    return float(getattr(b, "v", 0) or 0) * (b.c - b.o) / rg if rg > 0 else 0.0
+
+
+def _cvd_prefix(bars, S):
+    """CVD source for the TREND 'cvd' condition: the M5 bars (finer, like the EA) when there are real M5 bars,
+    else the strategy bars themselves. -> dict(closes, pre) with pre[k] = sum of the deltas of the first k bars."""
+    m5 = (S.get("mtf") or {}).get("M5")
+    src = m5["src"] if m5 and S.get("sec", 300) > 300 else bars
+    tsec = 300 if src is not bars else S.get("sec", 300)
+    pre = [0.0]
+    for b in src:
+        pre.append(pre[-1] + _delta(b))
+    return dict(closes=[b.t + tsec for b in src], pre=pre, m5=src is not bars)
+
+
+def cvd_change(S, i, n):
+    """CVD change over the last n strategy bars ending at bar i (only bars CLOSED by bar i's close). None = no data."""
+    import bisect
+    c = S.get("cvd")
+    if not c or i - n < 0:
+        return None
+    k1 = bisect.bisect_right(c["closes"], S["t_close"][i])
+    k0 = bisect.bisect_right(c["closes"], S["t_close"][i - n])
+    if k1 <= k0:
+        return None
+    return c["pre"][k1] - c["pre"][k0]
 
 
 # ============================================================================ evaluation
@@ -507,6 +634,8 @@ def _checks(name, S, i, d, cfg, bars, bias):
         out["rsi_side"] = r_ is not None and (r_ - 50) * d > 0
         e200 = S["ema200"][i]
         out["ema200"] = e200 is not None and (c - e200) * d > 0
+        pr, _k = of_pressure(S, i, int(cfg.get("of_bars", 3)))
+        out["of_buyers"] = pr is None or pr * d >= cfg.get("of_min", 15.0)       # no tick data: not judged
         out["not_extreme"] = r_ is not None and (r_ < cfg.get("rsi_hi", 70) if d == 1 else r_ > cfg.get("rsi_lo", 30))
         out["no_ob_block"] = ob_block(S, bars, i, d, cfg) is None
         m15 = mtf_state(S, i, cfg.get("bos_ltf", "M15"), cfg.get("bos_window", 32))
@@ -514,6 +643,10 @@ def _checks(name, S, i, d, cfg, bars, bias):
         n15 = (m15["up"] if d == 1 else m15["dn"]) if m15 else 0
         out["bos_m15"] = bool(m15) and n15 >= int(cfg.get("bos_m15_min", 2)) and m15["last"] == d
         out["bos_h4"] = bool(h4) and h4["last"] == d and h4["age"] is not None and h4["age"] < cfg.get("h4_window", 30)
+        m5 = mtf_state(S, i, "M5", cfg.get("m5_window", 32)) if S.get("sec", 300) > 300 else None
+        out["m5_struct"] = m5 is None or m5["last"] == d                 # no M5 bars (backtest): not judged
+        cv = cvd_change(S, i, 2 if cfg.get("cvd_mode") == "turn2" else int(cfg.get("cvd_bars", 8)))
+        out["cvd"] = cv is None or cv * d > 0
     elif name == "pullback":
         r, rp = g("rsi"), S["rsi"][i - 1] if i else None
         os_, ob = cfg["os"], cfg["ob"]
@@ -543,11 +676,21 @@ def _checks(name, S, i, d, cfg, bars, bias):
                 dj = True
         out["doji"] = dj
         out["ob"] = ob_hold(S, bars, i, d, cfg) is not None
+        # v2.8.21: a SUDDEN SPIKE into the extreme (no OB needed): the last 6 bars moved >= spike_atr x ATR, the
+        # high came first and the low last for a BUY (a drop), the low first and the high last for a SELL
+        w = range(max(0, i - 5), i + 1)
+        hi_k = max(w, key=lambda k: bars[k].h)
+        lo_k = min(w, key=lambda k: bars[k].l)
+        mv = bars[hi_k].h - bars[lo_k].l
+        out["spike"] = mv >= cfg.get("spike_atr", 3.0) * a and ((d == 1 and hi_k < lo_k) or (d == -1 and lo_k < hi_k))
+        out["ob_spike"] = out["ob"] or out["spike"]
         # the turn on THIS bar: RSI crosses back through os / ob, or Stochastic %K through 20 / 80
         kk, kp = S["stoch"][i], S["stoch"][i - 1] if i else None
         rsi_turn = r is not None and rp is not None and ((d == 1 and rp <= os_ < r) or (d == -1 and rp >= ob > r))
         st_turn = kk is not None and kp is not None and ((d == 1 and kp <= 20 < kk) or (d == -1 and kp >= 80 > kk))
         out["turn"] = rsi_turn or st_turn
+        pr, _k = of_pressure(S, i, 2)
+        out["of_turn"] = pr is None or pr * d >= cfg.get("of_min", 10.0)
         out["bb_touch"] = any(
             (S["bb_lo"][k] is not None and bars[k].l <= S["bb_lo"][k]) if d == 1 else
             (S["bb_up"][k] is not None and bars[k].h >= S["bb_up"][k]) for k in range(max(0, i - 5), i + 1))
@@ -589,6 +732,15 @@ def evaluate(name, bars, S, i, cfg, bias=0, box=None):
             return dict(ok=False, side=0, score=0.0, met={}, on=[], missing=["bos_h4"],
                         why=f"walang {cfg.get('bos_htf', 'H4')} BOS sa huling {cfg.get('h4_window', 30)} kandila (walang trend)",
                         **extra)
+    elif name == "pullback" and cfg.get("any_dir", False):
+        # v2.8.18: no trend / HTF needed: the side whose extreme is there (RSI oversold -> BUY, overbought -> SELL);
+        # when neither, the trend side (for the panel / progress only)
+        d = 0
+        for dd in (1, -1):
+            if _checks(name, S, i, dd, cfg, bars, bias).get("rsi"):
+                d = dd
+                break
+        d = d or trend_dir(S, i, bias, strict=False) or 1
     else:
         d = trend_dir(S, i, bias, strict=name != "pullback")
     if not d:
@@ -608,6 +760,17 @@ def evaluate(name, bars, S, i, cfg, bias=0, box=None):
     entry = bars[i].c
     if name == "trend":
         sl = entry - d * cfg["sl_atr"] * a
+        if cfg.get("sl_mode", "atr") == "swing":
+            # SL at the LAST SWING (Eugene, 2026-10-03): beyond the latest confirmed swing low (BUY) / high (SELL)
+            # + swing_buf x ATR, at least swing_min x ATR, capped at swing_max x ATR. No swing found: ATR SL.
+            sw = last_swing(bars, i, d)
+            if sw is not None:
+                dist = abs(entry - sw) + cfg.get("swing_buf", 0.1) * a
+                dist = max(dist, cfg.get("swing_min", 0.5) * a)
+                if cfg.get("swing_max", 4.0) > 0:
+                    dist = min(dist, cfg.get("swing_max", 4.0) * a)
+                sl = entry - d * dist
+                extra.update(sl_from="swing", swing=round(sw, 2))
     else:                                                        # pullback: beyond the dip extreme (or ATR)
         ext = min(b.l for b in bars[max(0, i - 5):i + 1]) if d == 1 else max(b.h for b in bars[max(0, i - 5):i + 1])
         o = ob_hold(S, bars, i, d, cfg) if met.get("ob") else None
@@ -621,6 +784,54 @@ def evaluate(name, bars, S, i, cfg, bias=0, box=None):
     tp = entry + d * risk * cfg["rr"]
     return dict(ok=ok, side=d, score=round(score, 1), met=met, on=on, missing=missing, why=why,
                 entry=round(entry, 2), sl=round(sl, 2), tp=round(tp, 2), rr=cfg["rr"], **extra)
+
+
+def last_swing(bars, i, d, k=3, look=60):
+    """The most recent CONFIRMED swing (k bars each side, known k bars later, so no look-ahead) on the strategy
+    bars before bar i: a swing LOW below the close for a BUY (d=1), a swing HIGH above it for a SELL. None if
+    there is none in the last `look` bars."""
+    c = bars[i].c
+    for j in range(i - k, max(k, i - look) - 1, -1):
+        if d == 1 and bars[j].l < c and all(bars[j].l <= bars[x].l for x in range(j - k, j + k + 1) if x != j):
+            return bars[j].l
+        if d == -1 and bars[j].h > c and all(bars[j].h >= bars[x].h for x in range(j - k, j + k + 1) if x != j):
+            return bars[j].h
+    return None
+
+
+def _orderflow(bars, sec):
+    """Per strategy bar: (buy, sell) tick volume from the live order flow (orderflow.CURRENT, MT5 ticks, tick rule).
+    None for bars without tick data (backtest, demo history before start): the ORDER FLOW conditions are then
+    simply not met. Only the bar's own closed data is used (no look-ahead)."""
+    try:
+        import orderflow
+        of = orderflow.CURRENT
+        tf = next((k for k, v in TF_SEC_NAMES.items() if v == sec), None)
+        if of is None or tf not in orderflow.TFS:
+            return None
+        st = {x[0]: (x[1], x[2]) for x in of.bar_stats(tf)}
+        return [st.get(b.t) for b in bars]
+    except Exception:
+        return None
+
+
+TF_SEC_NAMES = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800, "H1": 3600}
+
+
+def of_pressure(S, i, n):
+    """(delta % of volume over the last n bars, bars with data). + = buyers stronger, - = sellers stronger."""
+    of = S.get("of")
+    if not of:
+        return None, 0
+    b = s_ = 0.0
+    k = 0
+    for j in range(max(0, i - n + 1), i + 1):
+        x = of[j]
+        if x:
+            b, s_, k = b + x[0], s_ + x[1], k + 1
+    if not k or b + s_ <= 0:
+        return None, 0
+    return 100.0 * (b - s_) / (b + s_), k
 
 
 def obs_at(S, i, tf):
@@ -707,6 +918,8 @@ def _eval_conso(bars, S, i, cfg, box=None):
     met["adx_low"] = i - qb + 1 >= 0 and all((S["adx"][k] if S["adx"][k] is not None else 99) < cfg["adx_max"] for k in win)
     ap = _rank(S["atr"], i)
     met["atr_low"] = ap is not None and ap <= 50
+    pr, _k = of_pressure(S, i, int(cfg.get("of_bars", 5)))
+    met["of_balanced"] = pr is None or abs(pr) < cfg.get("of_min", 15.0)
     rr_ = S["rsi"][i]
     met["rsi_mid"] = rr_ is not None and 40 <= rr_ <= 60
     met["inside_bb"] = all(S["bb_up"][k] is not None and S["bb_lo"][k] <= bars[k].c <= S["bb_up"][k]
@@ -864,6 +1077,20 @@ def status(hub, tf=None, cfg=None):
             if ev:
                 out["strategies"][n]["last_auto"] = dict(t=int(ev["t"]), decision=ev.get("decision"),
                                                          text=ev.get("text", "")[:220])
+    pr, k = of_pressure(S, i, 3)
+    out["orderflow"] = None if pr is None else dict(pressure=round(pr, 1), bars=k)
+    for n in NAMES:                                       # what order flow means for THIS strategy, right now
+        c = cfg[n]
+        nb = 2 if n == "pullback" else int(c.get("of_bars", 3 if n == "trend" else 5))
+        p_, _k = of_pressure(S, i, nb)
+        e = out["strategies"][n]
+        d = e.get("side") or 0
+        need = c.get("of_min", 10.0 if n == "pullback" else 15.0)
+        role = {"trend": "kasabay ng trend ang mas malakas", "pullback": "bumalik na ang buyers / sellers sa dulo ng pullback",
+                "conso": "balanse ang buyers at sellers"}[n]
+        e["of"] = dict(on=bool(c["conditions"].get(OF_KEY[n])), key=OF_KEY[n], pct=None if p_ is None else round(p_, 1),
+                       bars=nb, need=need, side=d, role=role,
+                       ok=(e.get("met") or {}).get(OF_KEY[n]), nodata=p_ is None)
     out["news"] = news_status(hub)
     at_on = bool(at is not None and getattr(at, "enabled", False))
     tm = getattr(hub, "trader", None)

@@ -280,9 +280,7 @@ class DecisionEngine:
         open_same = [g for g in (tm.groups.values() if tm else []) if g.side == side]
         if open_same:
             state = "MANAGING" if any(time.time() - g.created > 60 for g in open_same) else "OPEN"
-        elif hard and s["require_no_blockers"]:
-            # A hard blocker is authoritative. Do not expose WATCH/READY while
-            # risk, execution, data, or conflict checks already reject trading.
+        elif setup_ready and (hard and s["require_no_blockers"]):
             state = "BLOCKED"
         elif setup_ready:
             state = "READY"
@@ -308,12 +306,6 @@ class DecisionEngine:
                    execution_ok=bool(exec_res.get("ok", True)), matrix=m, verdict=r.verdict if r else "",
                    t=time.time(), quality=q, confidence=q["confidence"], conflicts=q["conflicts"],
                    missing_required=q["missing_required"], required=q["required"],
-                   # Consumers should use this single action field instead of
-                   # inferring tradeability from score, confirmations, or state.
-                   action=({1: "BUY", -1: "SELL"}.get(side, "NONE")
-                           if state in ("READY", "OPEN", "MANAGING") else "NO_TRADE"),
-                   blocking_reasons=[dict(code=b["code"], text=b["text"], level=b.get("level", "hard"))
-                                     for b in hard],
                    smc=smc_summary(getattr(hub, "smc", None)),
                    data=getattr(hub, "data_status", None))
         out["explanation"] = setup_quality.explain(side, q, blockers, state)

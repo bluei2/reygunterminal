@@ -110,7 +110,8 @@ class Reconciler:
                         continue
                     # volume
                     step = (getattr(f, "broker", None) or {}).get("lot_step", 0.01) or 0.01
-                    exp = round((f.cfg.get("lot") or 0) * (mp["volume"] / m_lot0 if m_lot0 else 1), 8)
+                    exp = round((f.cfg.get("lot") or 0) * float(e.get("lot_mult") or 1.0)
+                                * (mp["volume"] / m_lot0 if m_lot0 else 1), 8)
                     diff = fp["volume"] - exp
                     if abs(diff) > step / 2 + 1e-9:
                         row["status"] = "DRIFT"

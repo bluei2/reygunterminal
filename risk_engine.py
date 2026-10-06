@@ -258,8 +258,9 @@ class RiskEngine:
         return out
 
     # ------------------------------------------------------------------ blockers
-    def hard_blockers(self, side=0, kind="manual", lot=None, sl_dist=None, tp_dist=None):
-        """All blockers for a new trade in `side` (0 = either). kind: manual | auto | preview."""
+    def hard_blockers(self, side=0, kind="manual", lot=None, sl_dist=None, tp_dist=None, risk_pct_cap=None):
+        """All blockers for a new trade in `side` (0 = either). kind: manual | auto | preview.
+        risk_pct_cap: a strategy's own max risk % per trade instead of the risk settings (v2.8.12: CONSO 5 %)."""
         hub, tm = self.hub, self.tm
         out = []
         auto = kind == "auto"
@@ -321,11 +322,12 @@ class RiskEngine:
             cs, known = self.contract_size()
             risk_usd = sl_dist * lot * cs
             eq = tm.master.info.get("equity") or 0
-            if rs["max_risk_per_trade_usd"] and risk_usd > rs["max_risk_per_trade_usd"]:
+            if rs["max_risk_per_trade_usd"] and risk_usd > rs["max_risk_per_trade_usd"] and risk_pct_cap is None:
                 out.append(blocker("RISK_PER_TRADE", f"risk ${risk_usd:.2f} > max ${rs['max_risk_per_trade_usd']:.2f}"))
-            if rs["max_risk_per_trade_pct"] and eq > 0 and 100 * risk_usd / eq > rs["max_risk_per_trade_pct"]:
+            cap = rs["max_risk_per_trade_pct"] if risk_pct_cap is None else float(risk_pct_cap)
+            if cap and eq > 0 and 100 * risk_usd / eq > cap:
                 out.append(blocker("RISK_PER_TRADE", f"risk {100 * risk_usd / eq:.2f}% of equity > max "
-                                                     f"{rs['max_risk_per_trade_pct']:.2f}%"))
+                                                     f"{cap:.2f}%" + (" (strategy limit)" if risk_pct_cap is not None else "")))
         if lot is not None and rs["max_exposure_lots"] and not bad(lot):
             open_lots = sum(p.get("volume", 0) for p in tm.master.positions)
             if open_lots + lot > rs["max_exposure_lots"] + 1e-9:

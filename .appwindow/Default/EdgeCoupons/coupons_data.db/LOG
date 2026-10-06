@@ -1,0 +1,6 @@
+2026/10/06-11:40:12.280 3c7c Reusing MANIFEST C:\reygun_terminal\.appwindow\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/10/06-11:40:34.043 3c7c Recovering log #45
+2026/10/06-11:40:34.043 3c7c Reusing old log C:\reygun_terminal\.appwindow\Default\EdgeCoupons/coupons_data.db/000045.log 
+2026/10/06-11:41:24.202 4010 Level-0 table #50: started
+2026/10/06-11:41:24.211 4010 Level-0 table #50: 683376 bytes OK
+2026/10/06-11:41:24.214 4010 Delete type=0 #45

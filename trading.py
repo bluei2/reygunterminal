@@ -13,6 +13,7 @@ REYGUN SuperChart trading: manual entries on a master account, mirrored to follo
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
 import time
@@ -29,8 +30,35 @@ CONTRACT_SIZE = 100.0            # paper trading: XAUUSD 1 lot = 100 oz
 
 DEFAULT_RISK = {"daily_dd": 0.0, "dd_mode": "%", "daily_tp": 0.0, "tp_mode": "%", "close_scope": "superchart"}
 RISK_VERSION = 2          # v2: DD/TP lock closes only SuperChart trades unless the user picks "all" again
+MASTER_PRESET = 1         # v2.8.0 (Eugene, 2026-10-04): master daily loss $20 / profit target $60 (once, if both were 0)
+MASTER_PRESET_RISK = dict(daily_dd=20.0, dd_mode="$", daily_tp=60.0, tp_mode="$")
 SAFETY_DEFAULTS = dict(close_unprotected=True, protective_sl_retry_count=3, protective_sl_retry_delay=2.0,
                        stale_follower_s=6.0, closing_timeout_s=600)
+# COPY EA TRADES (v2.8.1, Eugene 2026-10-05: "copy na lahat, kahit anong trade man - master EA, manual o terminal"):
+# EA trades on the master symbol are copied like manual ones. copy_magics limits it to some magic numbers
+# ("a-b, c" ranges, e.g. 26200001-26200004 = the REYGUN Master EA); EMPTY (default) = every EA.
+DEFAULT_COPY_MAGICS = ""
+
+
+def parse_magics(text):
+    """'26200001-26200004, 777' -> [(26200001, 26200004), (777, 777)]; '' -> [] (= any EA)."""
+    out = []
+    for part in str(text or "").replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            if "-" in part:
+                a, b = (int(x) for x in part.split("-", 1))
+            else:
+                a = b = int(part)
+        except ValueError:
+            continue
+        if a > 0 and b >= a:
+            out.append((a, b))
+    return out
+
+
 DEFAULT_MASTER = dict(name="Master", path="", login=0, symbol="", paper_balance=10000.0, **DEFAULT_RISK)
 DEFAULT_FOLLOWER = dict(name="Follower", path="", login=0, symbol="", lot=0.01, enabled=True,
                         paper_balance=10000.0, **DEFAULT_RISK)
@@ -38,10 +66,15 @@ DEFAULT_FOLLOWER = dict(name="Follower", path="", login=0, symbol="", lot=0.01, 
 
 # ============================================================================ config
 def load_config() -> dict:
-    cfg = {"master": dict(DEFAULT_MASTER), "followers": [], "safety": {}}
+    cfg = {"master": dict(DEFAULT_MASTER), "followers": [], "safety": {}, "copy_manual": True,
+           "copy_ea": True, "copy_magics": DEFAULT_COPY_MAGICS, "copy_when_locked": True}
     try:
         with open(CONFIG_FILE) as f:
             raw = json.load(f)
+        cfg["copy_manual"] = bool(raw.get("copy_manual", True))
+        cfg["copy_ea"] = bool(raw.get("copy_ea", True))
+        cfg["copy_magics"] = str(raw.get("copy_magics", DEFAULT_COPY_MAGICS) or "")
+        cfg["copy_when_locked"] = bool(raw.get("copy_when_locked", True))
         cfg["safety"] = {k: v for k, v in (raw.get("safety") or {}).items() if k in SAFETY_DEFAULTS}
         cfg["master"].update({k: v for k, v in (raw.get("master") or {}).items() if k in DEFAULT_MASTER})
         for fl in raw.get("followers") or []:
@@ -50,6 +83,20 @@ def load_config() -> dict:
             # older files had "all" as the silent default: switch to SuperChart-only; "all" must be chosen again
             for a in [cfg["master"]] + cfg["followers"]:
                 a["close_scope"] = "superchart"
+        if int(raw.get("master_preset", 0) or 0) < MASTER_PRESET:
+            m = cfg["master"]
+            if not float(m.get("daily_dd") or 0) and not float(m.get("daily_tp") or 0):
+                m.update(MASTER_PRESET_RISK)            # your own limits (if you had set any) are kept
+                cfg["_migrated"] = "master daily loss $20 / profit target $60"
+            cfg["master_preset"] = MASTER_PRESET
+        done = int(raw.get("master_dd_pips", 0) or 0)
+        m = cfg["master"]
+        if done < 1 or (done == 1 and m.get("dd_mode") == "pips" and float(m.get("daily_dd") or 0) == 200.0):
+            # v2.8.26 (Eugene: "400 ang dd limit ntin ndi 200"): master daily DD = 400 pips, once
+            # (also replaces the 200 pips set by v2.8.25; a value you chose yourself is kept)
+            m.update(daily_dd=400.0, dd_mode="pips")
+            cfg["_migrated"] = "master daily DD 400 pips"
+        cfg["master_dd_pips"] = 2
     except (OSError, ValueError):
         pass
     return cfg
@@ -66,8 +113,8 @@ def clean_follower(fl: dict) -> dict:
             out[k] = max(0.0, float(out[k] or 0))
     except (TypeError, ValueError):
         pass
-    out["dd_mode"] = "$" if out["dd_mode"] == "$" else "%"
-    out["tp_mode"] = "$" if out["tp_mode"] == "$" else "%"
+    out["dd_mode"] = out["dd_mode"] if out["dd_mode"] in ("$", "pips") else "%"
+    out["tp_mode"] = out["tp_mode"] if out["tp_mode"] in ("$", "pips") else "%"
     out["close_scope"] = "all" if out["close_scope"] == "all" else "superchart"
     out["enabled"] = bool(out["enabled"])
     return out
@@ -87,14 +134,17 @@ def clean_master(m: dict) -> dict:
             out[k] = max(0.0, float(out[k] or 0))
         except (TypeError, ValueError):
             out[k] = 0.0
-    out["dd_mode"] = "$" if out["dd_mode"] == "$" else "%"
-    out["tp_mode"] = "$" if out["tp_mode"] == "$" else "%"
+    out["dd_mode"] = out["dd_mode"] if out["dd_mode"] in ("$", "pips") else "%"
+    out["tp_mode"] = out["tp_mode"] if out["tp_mode"] in ("$", "pips") else "%"
     out["close_scope"] = "all" if out["close_scope"] == "all" else "superchart"
     return out
 
 
 def save_config(cfg: dict) -> None:
     cfg["risk_version"] = RISK_VERSION
+    cfg["master_preset"] = MASTER_PRESET
+    cfg["master_dd_pips"] = 2
+    cfg.pop("_migrated", None)
     with open(CONFIG_FILE, "w") as f:
         json.dump(cfg, f, indent=2)
 
@@ -149,6 +199,8 @@ class PaperBackend:
             return
         with self.lock:
             for t, o in list(self.pending_.items()):            # stop orders: trigger into a position
+                if o.get("kind") == "limit":
+                    continue                                       # the signal-test BUY LIMIT (80% of price) never fills
                 if (o["side"] == 1 and ask >= o["price"]) or (o["side"] == -1 and bid <= o["price"]):
                     fill = ask if o["side"] == 1 else bid          # fills at the market (slippage on a spike)
                     self.positions_[t] = dict(symbol=o["symbol"], side=o["side"], volume=o["volume"], open=fill,
@@ -188,10 +240,13 @@ class PaperBackend:
         bid, ask, _ = self._px()
         out = []
         for t, p in self.positions_.items():
+            magic = p.get("magic", mt5_ops.MAGIC)          # paper trades are ours; a test can add a manual one (0)
+            if (magic_only and magic != mt5_ops.MAGIC) or (symbol and p["symbol"] != symbol):
+                continue
             out.append(dict(ticket=t, symbol=p["symbol"], side=p["side"], volume=p["volume"], open=p["open"],
                             sl=p["sl"], tp=p["tp"], price=(bid if p["side"] == 1 else ask) or p["open"],
                             pnl=round(self._pnl(p, bid, ask), 2) if bid is not None else 0.0,
-                            magic=mt5_ops.MAGIC, comment=p["comment"]))
+                            magic=magic, comment=p["comment"]))
         return out
 
     def c_open_market(self, symbol, side, lot, sl_dist=0.0, tp_dist=0.0, comment=""):
@@ -283,6 +338,22 @@ class PaperBackend:
                   dict(name="Price", ok=ok, detail=f"bid {bid} ask {ask}" if ok else "no price yet")]
         return dict(ok=ok, checks=checks, login=0, server="PAPER", balance=round(self.balance, 2))
 
+    def c_signal_test_send(self, symbol):
+        bid, ask, _ = self._px()
+        if bid is None:
+            return dict(ok=False, checks=[dict(name="Price", ok=False, detail="no price yet")], market_closed=False)
+        self.next_ticket += 1
+        t = self.next_ticket
+        self.pending_[t] = dict(symbol=symbol, side=1, volume=0.01, price=round(bid * 0.8, 2), sl=0.0, tp=0.0,
+                                comment=mt5_ops.TEST_COMMENT, kind="limit")
+        return dict(ok=True, ticket=t, ms_send=0.0, market_closed=False, login=0, server="PAPER",
+                    checks=[dict(name="Send test order", ok=True, detail=f"PAPER (simulated) BUY LIMIT ticket #{t}")])
+
+    def c_signal_test_remove(self, ticket):
+        ok = self.pending_.pop(ticket, None) is not None
+        return dict(ok=ok, ms=0.0, check=dict(name="Delete test order", ok=ok,
+                                              detail="deleted (simulated)" if ok else "not found"))
+
     def c_close_all(self, scope="superchart"):
         n = 0
         for t in list(self.positions_):
@@ -314,6 +385,8 @@ class Account:
         self.orders_read_at = 0.0
         self.last_ok = 0.0          # last successful account read (watchdog)
         self.paused = ""            # set by the copier reconciliation (no new trades until you resume)
+        self.not_copied = []        # master only: manual / EA positions the copier skips (with the reason)
+        self.manual = []            # master only: YOUR manual positions on the master symbol (magic 0), for the copier
 
     @property
     def name(self):
@@ -327,15 +400,30 @@ class Account:
         for p in self.positions:
             if p["ticket"] == ticket:
                 return p
+        for p in self.manual:                       # a manual master trade that is being copied
+            if p["ticket"] == ticket:
+                return p
         return None
+
+    def pip_usd(self):
+        """$ value of 1 gold pip ($0.10 price move) at this account's BASE lot (follower: its lot; master: the AUTO
+        lot) - v2.8.24 daily DD / TP in pips. 200 pips at 0.01 lot (100 oz contract) = $20."""
+        cs = float((getattr(self, "broker", None) or {}).get("contract_size") or 100.0)
+        lot = float(self.cfg.get("lot") or getattr(self, "base_lot", 0.01) or 0.01)
+        return 0.1 * cs * lot
 
     def limits(self):
         base = self.day_start or 0.0
         dd = self.cfg.get("daily_dd", 0.0) or 0.0
         tp = self.cfg.get("daily_tp", 0.0) or 0.0
-        dd_amt = dd if self.cfg.get("dd_mode") == "$" else base * dd / 100
-        tp_amt = tp if self.cfg.get("tp_mode") == "$" else base * tp / 100
-        return dd_amt, tp_amt
+
+        def amt(v, mode):
+            if mode == "$":
+                return v
+            if mode == "pips":                       # v2.8.24 (Eugene): DD / TP counted in pips
+                return v * self.pip_usd()
+            return base * v / 100
+        return amt(dd, self.cfg.get("dd_mode")), amt(tp, self.cfg.get("tp_mode"))
 
     def view(self):
         eq = self.info.get("equity")
@@ -346,7 +434,9 @@ class Account:
                     error=self.error, connected=self.connected, login=self.info.get("login"),
                     server=self.info.get("server"), balance=self.info.get("balance"), equity=eq,
                     trade_allowed=self.info.get("trade_allowed", False), day_start=self.day_start, day_pl=day_pl,
-                    dd_amount=dd_amt, tp_amount=tp_amt, locked=self.locked,
+                    dd_amount=dd_amt, tp_amount=tp_amt, locked=self.locked, pip_usd=round(self.pip_usd(), 4),
+                    dd_mode=self.cfg.get("dd_mode"), daily_dd=self.cfg.get("daily_dd"), tp_mode=self.cfg.get("tp_mode"),
+                    daily_tp=self.cfg.get("daily_tp"),
                     lot=self.cfg.get("lot"), enabled=self.cfg.get("enabled", True), paused=self.paused,
                     open_trades=len(self.positions))
 
@@ -354,7 +444,7 @@ class Account:
 class Group:
     def __init__(self, gid, side, created, legs, m_vol, m_sl, m_tp, m_open, sl_dist=0.0, tp_dist=0.0,
                  state="MANAGING", protected=None, closing=None, mfe_px=None, mae_px=None, mfe_t=None, mae_t=None,
-                 pm_mode="NONE", pm_done=None, **_):
+                 pm_mode="NONE", pm_done=None, kind="superchart", source="", **_):
         self.gid, self.side, self.created = gid, side, created
         self.legs = legs                    # account id -> ticket
         self.m_vol, self.m_sl, self.m_tp, self.m_open = m_vol, m_sl, m_tp, m_open
@@ -367,6 +457,8 @@ class Group:
         self.missing = 0                    # consecutive checks where the master position was not found
         self.pm_mode = pm_mode              # position manager: NONE / BE_ACTIVE / PROFIT_LOCK_ACTIVE / TRAIL_ACTIVE
         self.pm_done = list(pm_done or [])  # partial-close steps already done
+        self.kind = kind                    # "superchart" | "copy" (your manual master trade copied to followers)
+        self.source = source or ""          # AUTO strategy that opened it: st_trend / st_pullback / st_conso (MASTER)
 
     def to_json(self):
         d = self.__dict__.copy()
@@ -384,6 +476,13 @@ class TradeManager:
         self.armed = False
         self.lock = threading.RLock()
         self.cfg = load_config()
+        if self.cfg.get("_migrated"):
+            note = self.cfg.pop("_migrated")
+            try:
+                save_config(self.cfg)
+                hub.note("warn", f"MASTER setup: {note} sa master account (Accounts → palitan kung gusto mo)")
+            except OSError as e:
+                report("CONFIG_ERROR", "trading", "SAVE_FAILED", e)
         self.groups: dict[str, Group] = {}
         self.pool = ThreadPoolExecutor(max_workers=8)
         suffix = "_paper" if self.paper else ""
@@ -513,6 +612,8 @@ class TradeManager:
             try:
                 self.refresh()
                 self.risk_check()
+                self.copy_manual()
+                self.copy_audit()
                 self.sync()
                 self.protect()
                 self.track_excursion()
@@ -540,8 +641,18 @@ class TradeManager:
             if isinstance(ords, list):
                 a.orders, a.orders_fresh = ords, True
                 a.orders_read_at = started          # this read began at `started` (News Trader: stale-read guard)
-            pos = a.backend.call("positions", None, True)
+                self._sweep_test_orders(a, ords)
+            want_manual = a.role == "master" and (self.cfg.get("copy_manual", True) or self.cfg.get("copy_ea", True))
+            pos = a.backend.call("positions", None, not want_manual)
             if isinstance(pos, list):
+                if want_manual:
+                    a.manual = [p for p in pos if self._copyable(p.get("magic")) and p.get("symbol") == a.symbol]
+                    a.not_copied = [dict(p, why=self._not_copy_reason(p, a.symbol)) for p in pos
+                                    if p.get("magic") != mt5_ops.MAGIC and p not in a.manual]
+                    pos = [p for p in pos if p.get("magic") == mt5_ops.MAGIC]
+                else:
+                    a.manual = []
+                    a.not_copied = []
                 a.positions = pos
                 a.fresh = True             # this cycle's positions are trustworthy
             if time.time() - getattr(a, "broker_at", 0) > 10:
@@ -549,6 +660,27 @@ class TradeManager:
                 if bi.get("ok"):
                     a.broker, a.broker_at = bi, time.time()
         list(self.pool.map(one, self.all_accounts()))
+
+    def _sweep_test_orders(self, a, ords):
+        """A 📡 Test signal order (comment RGSC-TEST) is never left behind: one still pending after 30 s (the delete
+        failed or the app was closed during the test) is deleted here. Only that comment + our magic is touched."""
+        seen = getattr(a, "test_seen", None)
+        if seen is None:
+            seen = a.test_seen = {}
+        now = time.time()
+        live = {o["ticket"] for o in ords if str(o.get("comment", "")).startswith(mt5_ops.TEST_COMMENT)}
+        for t in list(seen):
+            if t not in live:
+                seen.pop(t, None)
+        for t in live:
+            first = seen.setdefault(t, now)
+            if now - first >= 30 and not getattr(self, "_signal_test_running", False):
+                r = a.backend.call("cancel_order", t)
+                if r.get("ok"):
+                    seen.pop(t, None)
+                    self.hub.note("warn", f"{a.name}: naiwang test order {mt5_ops.TEST_COMMENT} #{t} - binura")
+                elif now - first < 40:
+                    self.hub.note("error", f"{a.name}: hindi mabura ang test order #{t}: {r.get('error')} - burahin sa MT5")
 
     def _acct_day(self, a):
         """Each account's own broker day (its server clock); falls back to the master's day."""
@@ -570,6 +702,9 @@ class TradeManager:
             if a.locked or a.day_start is None:
                 continue
             pl = a.info["equity"] - a.day_start
+            if a is self.master:                    # the master's base lot = the AUTO lot (pips -> $)
+                at_ = getattr(self.hub, "autotrader", None)
+                a.base_lot = float((at_.settings.get("lot") if at_ is not None else None) or 0.01)
             dd_amt, tp_amt = a.limits()
             reason = ""
             if dd_amt > 0 and pl <= -dd_amt:
@@ -691,6 +826,133 @@ class TradeManager:
                         dirty = True
             if dirty:
                 self._save_groups()
+
+    def copy_audit(self):
+        """v2.8.10: every master trade must have its followers. A trade that is 20 s old and is missing an enabled
+        follower is reported ONCE (event log + alert) with that follower's reason, so a miss is never silent."""
+        if not self.followers:
+            return
+        now = time.time()
+        noted = getattr(self, "_audit_noted", set())
+        self._audit_noted = noted
+        with self.lock:
+            for gid, g in list(self.groups.items()):
+                if gid in noted or g.closing or not (20 <= now - g.created <= 900) or "master" not in g.legs:
+                    continue
+                miss = []
+                for f in self.followers:
+                    if f.id in g.legs or not f.cfg.get("enabled"):
+                        continue
+                    why = self.follower_skip_reason(f)
+                    miss.append(f"{f.name}: {why or 'walang order na pumasok (tingnan ang event log / MT5 Journal)'}")
+                noted.add(gid)
+                if miss:
+                    word = "BUY" if g.side == 1 else "SELL"
+                    src = getattr(g, "source", "") or getattr(g, "kind", "")
+                    self.hub.note("error", f"⚠ COPY CHECK: master {word} {gid} ({src}) WALANG kopya sa " + " · ".join(miss))
+                    self._alert("⚠ <b>COPY CHECK</b>", f"Master {word} {gid} ({src}) walang kopya sa: " + "; ".join(miss))
+
+    def _not_copy_reason(self, p, symbol):
+        """Why a master trade (manual / EA) is NOT copied - shown once in the event log (v2.8.2)."""
+        magic = p.get("magic") or 0
+        if p.get("symbol") != symbol:
+            return f"ibang symbol ({p.get('symbol')}, ang master symbol ay {symbol})"
+        if magic == 0:
+            return "naka-OFF ang 'I-COPY din ang MANUAL trades'"
+        if not self.cfg.get("copy_ea", True):
+            return "naka-OFF ang 'I-COPY din ang trades ng EA'"
+        return f"magic {magic} wala sa listahan ({self.cfg.get('copy_magics')})"
+
+    def _copyable(self, magic):
+        """A master position the copier follows: yours (magic 0), or an EA magic in copy_magics when copy_ea is on.
+        Never our own orders (magic 20260925: those are already groups)."""
+        if magic == 0:
+            return bool(self.cfg.get("copy_manual", True))
+        if not magic or magic == mt5_ops.MAGIC or not self.cfg.get("copy_ea", True):
+            return False
+        rng = parse_magics(self.cfg.get("copy_magics", DEFAULT_COPY_MAGICS))
+        return not rng or any(a <= magic <= b for a, b in rng)
+
+    def copy_manual(self):
+        """COPY MANUAL TRADES (Eugene, 2026-10-02): a trade YOU open on the master MT5 by hand (PC or phone; magic 0,
+        on the master symbol) is copied to every follower with the follower's fixed lot and the same SL / TP $
+        distance. From then on it is a normal group: SL / TP moves, partial closes and the close are mirrored.
+        EA trades (magic != 0), other symbols and trades that were already open when the app started are not copied.
+        Works WITHOUT arming trading (v2.7.4): whatever you do on the master, the followers do too.
+        The position manager leaves copied trades alone (your manual trade is yours)."""
+        if not (self.cfg.get("copy_manual", True) or self.cfg.get("copy_ea", True)) or not self.master.connected \
+                or not self._fresh(self.master):
+            return
+        with self.lock:
+            seen = getattr(self, "_manual_seen", None)
+            done = {g.legs.get("master") for g in self.groups.values()}
+            if seen is None:                            # first read: what is already open is not copied
+                self._manual_seen = {p["ticket"] for p in self.master.manual} | done
+                pre = [p for p in self.master.manual if p["ticket"] not in done]
+                if pre:
+                    self.hub.note("warn", f"COPY: {len(pre)} trade sa master na bukas na BAGO nag-start ang app "
+                                          f"(#{', #'.join(str(p['ticket']) for p in pre[:5])}) - HINDI kinopya sa followers")
+                self._nc_noted = {p["ticket"] for p in getattr(self.master, "not_copied", [])}
+                return
+            nc_noted = getattr(self, "_nc_noted", set())
+            for p in getattr(self.master, "not_copied", []):
+                if p["ticket"] not in nc_noted:
+                    nc_noted.add(p["ticket"])
+                    who = f"EA {p.get('magic')}" if p.get("magic") else "manual"
+                    self.hub.note("warn", f"COPY: {who} trade #{p['ticket']} {p.get('comment') or ''} HINDI kinopya: {p['why']}")
+            self._nc_noted = nc_noted
+            for p in list(self.master.manual):
+                t = p["ticket"]
+                if t in seen or t in done:
+                    continue
+                seen.add(t)
+                # no ARM needed (Eugene: "khit ndi ako mag pindot s terminal ... un nrin gawin s followers"):
+                # the trade is already open on the master, the copier only follows it. A locked master still stops it.
+                who = "EA " + str(p.get("magic")) if p.get("magic") else "manual"
+                if self.master.locked:
+                    # v2.8.2: the trade is ALREADY open on the master (the EA does not know about the app's daily lock),
+                    # so by default the followers still follow it; each follower's own daily lock still applies.
+                    if not self.cfg.get("copy_when_locked", True):
+                        self.hub.note("warn", f"COPY: {who} trade #{t} hindi kinopya (master LOCKED: {self.master.locked})")
+                        continue
+                    self.hub.note("warn", f"COPY: master LOCKED ({self.master.locked}) pero bukas ang {who} trade #{t} "
+                                          f"sa master -> kinokopya pa rin sa followers")
+                side = p["side"]
+                sl_d = round(abs(p["open"] - p["sl"]), 2) if p["sl"] else 0.0
+                tp_d = round(abs(p["tp"] - p["open"]), 2) if p["tp"] else 0.0
+                gid = uuid.uuid4().hex[:6]
+                comment = f"{mt5_ops.COMMENT_PREFIX}{gid}"
+                g = Group(gid, side, time.time(), {"master": t}, p["volume"], p["sl"], p["tp"], p["open"],
+                          sl_dist=sl_d, tp_dist=tp_d, state="MANAGING", kind="copy")
+                g.protected["master"] = bool(p["sl"])
+                todo = []
+                for f in self.followers:
+                    why_f = self.follower_skip_reason(f)
+                    if why_f is None:
+                        todo.append(f)
+                    elif why_f:
+                        self.hub.note("warn", f"COPY #{t}: FOLLOWER {f.name} hindi kinopya ({why_f})")
+                names = [self.master.name]
+                for f in todo:
+                    r = f.backend.call("open_market", f.symbol, side, f.cfg["lot"], sl_d, tp_d, comment)
+                    if r.get("ok"):
+                        g.legs[f.id] = r["ticket"]
+                        names.append(f.name)
+                    else:
+                        self.hub.note("error", f"COPY #{t}: {f.name} order failed: {r.get('error')}")
+                self.groups[gid] = g
+                self._save_groups()
+                word = "BUY" if side == 1 else "SELL"
+                self.hub.note("signal", f"COPY {who} {word} {p['volume']} @ {p['open']:.2f} (master #{t}) → "
+                                        f"{len(g.legs) - 1} follower(s)", plugin="Copier", dir=side, tf="",
+                              bar=time.strftime("%m-%d %H:%M"))
+                try:
+                    self.journal.opened(gid, self.master.symbol, side, p["volume"], p["open"], p["sl"], p["tp"],
+                                        sl_d, tp_d, names, score_snapshot(self.hub.read), self.paper,
+                                        news=self._news_context(), kind="ea_mt5" if p.get("magic") else "manual_mt5",
+                                        source_magic=p.get("magic") or 0)
+                except Exception as e:
+                    self.hub.note("error", f"journal: {e}")
 
     def protect(self):
         """Protective SL watchdog: every leg of a new trade must show a stop loss. If one does not, attach it
@@ -921,7 +1183,7 @@ class TradeManager:
         return dict(title=w["title"], currency=w["currency"], impact=w["impact"], minutes=w["minutes"],
                     active=w["active"])
 
-    def check_request(self, side, lot, sl_dist, tp_dist, kind="manual"):
+    def check_request(self, side, lot, sl_dist, tp_dist, kind="manual", risk_pct_cap=None):
         """Everything that must hold before an order may be sent (no side effects). -> (ok, reason)"""
         ok, why = self.can_trade()
         if not ok:
@@ -937,7 +1199,8 @@ class TradeManager:
                            f"Isara muna, o i-OFF ang 'no opposite' sa AUTO TRADE ⚙.")
         risk = getattr(self.hub, "risk", None)                 # central blockers (stale price, spread, news, ...)
         if risk is not None:
-            hard = risk.hard_only(risk.hard_blockers(side, kind, lot, sl_dist, tp_dist))
+            # v2.8.22: a strategy's own risk % (TREND 5 %, x align) is the same here as in the gate
+            hard = risk.hard_only(risk.hard_blockers(side, kind, lot, sl_dist, tp_dist, risk_pct_cap=risk_pct_cap))
             if hard:
                 return False, "BLOCKED: " + "; ".join(f"{b['code']} ({b['text']})" for b in hard)
         ex = getattr(self.hub, "execution", None)              # broker / execution checks (execution_guard.py)
@@ -946,6 +1209,22 @@ class TradeManager:
             if not r["ok"]:
                 return False, "EXECUTION: " + "; ".join(f"{x['code']} ({x['text']})" for x in r["reasons"])
         return True, ""
+
+    def follower_skip_reason(self, f):
+        """None = this follower gets the copy; "" = switched off by you (copy trades unticked); else the reason."""
+        if not f.cfg.get("enabled"):
+            return ""
+        if not f.connected:
+            return f"hindi konektado: {getattr(f, 'error', '') or getattr(f, 'status', '') or 'MT5 terminal'}"
+        if f.locked:
+            return f"LOCKED: {f.locked} (Accounts → Unlock)"
+        if getattr(f, "paused", ""):
+            return f"PAUSED: {f.paused}"
+        if not f.cfg.get("lot"):
+            return "walang Fixed Lot (0)"
+        if not self.paper and not f.info.get("trade_allowed", True):
+            return "naka-OFF ang Algo Trading sa MT5 ng follower"
+        return None
 
     def open(self, side, lot, sl_dist, tp_dist, kind="manual", note="", request_id=None, lifecycle=None, meta=None):
         """Send one trade to the master and every enabled follower.
@@ -963,7 +1242,7 @@ class TradeManager:
         stamp = lambda st, note_="": life.append(dict(t=time.time(), state=st, note=note_))
         if not life:
             stamp("REQUESTED", kind)
-        ok, why = self.check_request(side, lot, sl_dist, tp_dist, kind)
+        ok, why = self.check_request(side, lot, sl_dist, tp_dist, kind, risk_pct_cap=(meta or {}).get("risk_pct_cap"))
         if not ok:
             res = dict(ok=False, error=why)
             if request_id:
@@ -994,10 +1273,16 @@ class TradeManager:
                 return res
             stamp("FILLED", f"master {rm['volume']} @ {rm['price']}")
             g = Group(gid, side, time.time(), {"master": rm["ticket"]}, rm["volume"], rm["sl"], rm["tp"], rm["price"],
-                      sl_dist=sl_dist, tp_dist=tp_dist, state="PROTECTION_PENDING" if sl_dist else "MANAGING")
-            todo = [f for f in self.followers if f.connected and f.cfg.get("enabled") and not f.locked
-                    and not getattr(f, "paused", "")
-                    and f.cfg.get("lot") and (self.paper or f.info.get("trade_allowed", True))]
+                      sl_dist=sl_dist, tp_dist=tp_dist, state="PROTECTION_PENDING" if sl_dist else "MANAGING",
+                      source=str((meta or {}).get("strategy") or ""))
+            todo = []
+            for f in self.followers:                    # every follower that is left out says WHY (event log + journal)
+                why_f = self.follower_skip_reason(f)
+                if why_f is None:
+                    todo.append(f)
+                elif why_f:
+                    stamp("FOLLOWER_SKIPPED", f"{f.name}: {why_f}")
+                    self.hub.note("warn", f"FOLLOWER {f.name}: hindi kinopya ({why_f})")
             ex = getattr(self.hub, "execution", None)
             if ex is not None:                          # skip followers the broker would reject (lot step, stops...)
                 keep = []
@@ -1010,8 +1295,14 @@ class TradeManager:
                         self.hub.note("warn", f"{f.name}: skipped by the execution guard ({why_f})")
                 todo = keep
 
+            mult = float((meta or {}).get("lot_mult") or 1.0)        # v2.8.22: x2 when H4/H1/M15 align
+
             def send(f):
-                return f, f.backend.call("open_market", f.symbol, side, f.cfg["lot"], sl_dist, tp_dist, comment)
+                flot = f.cfg["lot"]
+                if mult != 1.0:
+                    step = float((getattr(f, "broker", None) or {}).get("lot_step") or 0.01)
+                    flot = round(max(step, round(f.cfg["lot"] * mult / step) * step), 2)
+                return f, f.backend.call("open_market", f.symbol, side, flot, sl_dist, tp_dist, comment)
 
             for f, r in self.pool.map(send, todo):
                 results.append(dict(account=f.name, **r))
@@ -1106,13 +1397,23 @@ class TradeManager:
         with self.lock:
             g = self._group(gid)
             fraction = max(0.01, min(1.0, float(fraction)))
-            jobs = []
+            jobs, skipped = [], []
             for acc_id, t in g.legs.items():
                 a = self._acct(acc_id)
                 ok_read = a is not None and a.connected and (acc_id == "master" or self._fresh(a))
                 p = a.pos(t) if ok_read else None          # followers: never act on a stale read
-                if p:
-                    jobs.append((a, t, None if fraction >= 0.999 else p["volume"] * fraction))
+                if p and fraction < 0.999:
+                    # a PARTIAL close must never become a full close (0.5 x 0.01 would round to the whole 0.01)
+                    br = getattr(a, "broker", None) or {}
+                    step = float(br.get("lot_step") or 0.01)
+                    vmin = float(br.get("min_lot") or 0.01)
+                    part = math.floor(p["volume"] * fraction / step + 1e-9) * step
+                    if part < vmin - 1e-9 or p["volume"] - part < vmin - 1e-9:
+                        skipped.append(a.name)
+                        continue
+                    jobs.append((a, t, round(part, 8)))
+                elif p:
+                    jobs.append((a, t, None))
             res = list(self.pool.map(lambda j: (j[0].name, j[0].backend.call("close", j[1], j[2])), jobs))
             if fraction >= 0.999:
                 done = {a.id for a, _, _ in jobs}
@@ -1137,6 +1438,9 @@ class TradeManager:
         for n, r in res:
             if not r.get("ok"):
                 self.hub.note("error", f"{n}: close failed: {r.get('error')}")
+        if skipped:
+            self.hub.note("info", f"group {gid}: partial {fraction:.0%} skipped on {', '.join(skipped)} "
+                                  f"(lot too small to split - the whole trade stays open)")
         self.hub.note("info", f"group {gid}: closed {fraction:.0%} on {len(res)} account(s)")
         self.refresh()
         return dict(ok=all(r.get("ok") for _, r in res), results=[dict(account=n, **r) for n, r in res])
@@ -1215,7 +1519,12 @@ class TradeManager:
             cfg = {"master": clean_master(new.get("master") or self.cfg["master"]),
                    "followers": [clean_follower(f) for f in (new.get("followers") or [])],
                    "safety": {k: v for k, v in (new.get("safety") or self.cfg.get("safety") or {}).items()
-                              if k in SAFETY_DEFAULTS}}
+                              if k in SAFETY_DEFAULTS},
+                   "copy_manual": bool(new.get("copy_manual", self.cfg.get("copy_manual", True))),
+                   "copy_ea": bool(new.get("copy_ea", self.cfg.get("copy_ea", True))),
+                   "copy_when_locked": bool(new.get("copy_when_locked", self.cfg.get("copy_when_locked", True))),
+                   "copy_magics": ",".join(f"{a}-{b}" if a != b else str(a) for a, b in
+                                           parse_magics(new.get("copy_magics", self.cfg.get("copy_magics", ""))))}
             old = self.cfg["master"]
             m = cfg["master"]
             master_moved = any(str(old.get(k) or "") != str(m.get(k) or "") for k in ("path", "login", "symbol"))
@@ -1260,6 +1569,62 @@ class TradeManager:
         good = sum(1 for x in res if x.get("ok"))
         self.hub.note("info", f"connection test: {good}/{len(res)} account(s) ready")
         return dict(ok=all(x.get("ok") or x.get("skipped") for x in res), results=res, paper=self.paper)
+
+    def signal_test(self, hold=5.0):
+        """SIGNAL TEST (v2.7.9): a REAL order through the same route as every signal, on every account at once -
+        a BUY LIMIT of the minimum lot at 80% of the price (cannot fill). It stays `hold` s so you can see
+        "RGSC-TEST" in each MT5 Trade tab, then it is deleted. Works without ARM; refused while HALTED
+        (a halt is never cleared or bypassed). The wait happens here, NOT inside the MT5 lock."""
+        if self.halted:
+            return dict(ok=False, error="HALTED - i-clear muna ang HALT bago mag-test", results=[])
+        hold = max(0.0, min(float(hold), 10.0))
+        accts = self.all_accounts()
+        self._signal_test_running = True
+        try:
+            return self._signal_test(accts, hold)
+        finally:
+            self._signal_test_running = False
+
+    def _signal_test(self, accts, hold):
+
+        def send(a):
+            if a.role == "follower" and not a.cfg.get("enabled", True):
+                return dict(id=a.id, name=a.name, role=a.role, ok=False, skipped=True,
+                            checks=[dict(name="Copy", ok=False, detail="follower is switched OFF")])
+            if not a.connected:
+                return dict(id=a.id, name=a.name, role=a.role, ok=False,
+                            checks=[dict(name="Connection", ok=False, detail=a.error or a.status)])
+            if a.locked:
+                return dict(id=a.id, name=a.name, role=a.role, ok=False,
+                            checks=[dict(name="Account", ok=False, detail=f"LOCKED: {a.locked}")])
+            r = a.backend.call("signal_test_send", a.symbol)
+            if not isinstance(r, dict) or "checks" not in r:
+                r = dict(ok=False, checks=[dict(name="Send test order", ok=False,
+                                                detail=(r or {}).get("error", "no answer from this MT5"))])
+            return dict(r, id=a.id, name=a.name, role=a.role, symbol=a.symbol)
+        res = list(self.pool.map(send, accts))
+        if any(x.get("ticket") for x in res) and hold:
+            time.sleep(hold)
+
+        def remove(pair):
+            a, r = pair
+            t = r.get("ticket")
+            if not t:
+                return r
+            rm = a.backend.call("signal_test_remove", t)
+            chk = rm.get("check") if isinstance(rm, dict) and rm.get("check") else dict(
+                name="Delete test order", ok=False,
+                detail=f"{(rm or {}).get('error', 'failed')} - BURAHIN MANO-MANO ang {mt5_ops.TEST_COMMENT} #{t} sa MT5")
+            r["checks"].append(chk)
+            r["ok"] = bool(r.get("ok")) and bool(chk.get("ok"))
+            return r
+        res = list(self.pool.map(remove, zip(accts, res)))
+        good = sum(1 for x in res if x.get("ok"))
+        closed = any(x.get("market_closed") for x in res)
+        self.hub.note("info" if good == len(res) else "warn",
+                      f"SIGNAL TEST: {good}/{len(res)} account(s) OK" + (" (market closed)" if closed else ""))
+        return dict(ok=all(x.get("ok") or x.get("skipped") for x in res), results=res, paper=self.paper,
+                    market_closed=closed)
 
     def find_symbols(self, acc_id, base=None):
         """Symbols on that account's own MT5 that match the base (from the master symbol by default)."""

@@ -1,5 +1,333 @@
 # REYGUN SuperChart: changelog
 
+## v2.8.26 (build 2026-10-05.26)
+- **Master daily DD = 400 pips** (Eugene: "400 ang dd limit ntin ndi 200"). Pinapalitan din ang 200 pips na inilagay
+  ng v2.8.25 (isang beses; ang sariling value mo ay hindi ginagalaw). 0.01 lot = -$40.
+
+## v2.8.25 (build 2026-10-05.25)
+- **Master daily DD = 200 pips** (Eugene): inilipat isang beses mula $20 (master lang; ang daily TP ay hindi
+  ginalaw). Sa 0.01 lot = -$20; papalitan sa Accounts kung gusto.
+
+## v2.8.24 (build 2026-10-05.24)
+- **Daily DD / TP sa PIPS** (Eugene): bagong pagpipilian na "pips" sa Accounts (bukod sa % at $). 1 gold pip =
+  $0.10 na galaw; binibilang sa base lot ng bawat account (follower: sariling lot; master: AUTO lot). Hal. DD
+  400 pips: master 0.01 → -$40, follower 0.02 → -$80. Ang x2 (naka-align) na trade ay doble ang bawas sa DD
+  dahil doble ang lot. Ipinapakita sa Accounts: "DD at -$40 (400 pips)".
+
+## v2.8.23 (build 2026-10-05.23)
+- **SL max $20 (200 gold pips) para sa TREND at PULLBACK** (Eugene: "max tayo sa SL na $20 or 200 pips"). Wala nang
+  % risk block (RISK_PER_TRADE) sa dalawa: ang SL ay ang sariling SL ng strategy (TREND: last swing), pero hindi
+  lalampas sa $20 na layo; ang TP ay sumusunod (1:2 → $40). `max_sl` = 20, `max_risk_pct` = 0 (off), isang beses
+  inilipat (settings schema 16). Pareho ang layo kahit x2 ang lot (naka-align): 0.01 lot = $20, 0.02 lot = $40 kapag
+  tinamaan ang SL. Event log: "TREND SL: $28.60 → $20.00 (max $20)".
+
+## v2.8.22 (build 2026-10-05.22)
+- **x2 lot kapag naka-align ang H4 + H1 + M15** (Eugene): TREND / PULLBACK, master AT followers (hal. master 0.01 →
+  0.02, follower 0.02 → 0.04) kapag pareho ang direksyon ng trade at ng H4, H1 at M15 structure. Kung hindi
+  (hal. H1 / M15 lang), base lot. `align_mult` (default 2; 1 = off). Event log: "ALIGN H4·H1·M15 x2". Ang
+  reconciliation ay umaasa sa doble na volume (walang maling "volume drift" repair).
+- **FIX: TREND 5% risk sa pagpapadala ng order.** Ang gate ay pumapayag hanggang 5%, pero ang huling check bago
+  ipadala ang order ay gumagamit pa rin ng 2% ng risk settings, kaya puwedeng "FAILED: RISK_PER_TRADE". Iisang
+  limit na (5%; 10% kapag x2).
+
+## v2.8.21 (build 2026-10-05.21)
+- **PULLBACK: Order block O biglang spike** (Eugene: "khit walang OB, pero kung may OB mas ok"). Bagong kondisyon
+  `ob_spike`: pasado kapag may order block (gaya dati) O may biglang galaw na ≥ 3 × ATR (`spike_atr`) sa huling
+  6 bars papunta sa extreme (bagsak bago ang BUY, akyat bago ang SELL). Kasama pa rin ang RSI 30/70. Pinalitan ang
+  "ob" ng "ob_spike" isang beses (settings schema 15) at sa MASTER profile. Kapag may OB, doon pa rin ang SL.
+
+## v2.8.20 (build 2026-10-05.20)
+- **REVERSAL kapag may ENTRY lang** (Eugene: "pag may entry lng sna ang pag close"): ang pagsara ng open trades na
+  kontra ay nangyayari lang kapag talagang PUMASOK ang bagong TREND / PULLBACK trade. Kung hinarangan ang signal,
+  walang isinasara. Kung puno ang max open dahil sa mga kontrang trade: isasara muna ang mga iyon, saka papasok.
+- **CONSO: bagong box ang papalit sa lumang grid** (Eugene: "mapapalitan ang lumang conso box"): kapag may bagong
+  CONSO box habang naka-pending pa ang luma (at walang bukas na CONSO trade), buburahin ang lumang pares at ilalagay
+  ang bago. Hindi na babalik ang lumang box. Kung walang bagong box, hinahayaan ang pending (pares, OCO).
+
+## v2.8.19 (build 2026-10-05.19)
+- **Hindi na binubura ng reversal ang isang side ng CONSO grid** (Eugene: na-cancel ang BUY STOP kahit walang na-hit).
+  Dati (v2.8.0): bagong TREND / PULLBACK SELL → binubura ang CONSO BUY STOP (at baligtad), kaya SELL STOP lang ang
+  naiiwan. Ngayon laging pares ang grid hanggang ma-hit (OCO). Ang lumang galaw: `rev_cancel_conso` (default OFF).
+  Ang open trades na kontra ay isinasara pa rin ng reversal.
+
+## v2.8.18 (build 2026-10-05.18)
+- **PULLBACK sa dalawang direksyon, kahit kontra sa HTF** (Eugene: para sa biglang spike, sell at buy man):
+  RSI oversold → BUY, overbought → SELL, kahit Bearish / Bullish ang HTF (`pullback.any_dir`, default ON). Hindi na
+  hinaharang ng HTF bias / structure conflict sa gate. Ang mga kondisyon (MASTER: RSI 30/70 + order block) ay
+  kailangan pa rin.
+- **PULLBACK: walang VOLATILE block** (`block_volatile` OFF): mataas talaga ang ATR pagkatapos ng spike.
+  Isang beses inilipat (settings schema 14); maibabalik sa ⚙ ng PULLBACK.
+
+## v2.8.17 (build 2026-10-05.17)
+- **TREND SL hanggang 5% ng equity** (Eugene: "gawin mo nlng n lging 5% ang sl"). Ang SL ay nasa last swing pa rin,
+  pero kapag lampas ito sa 5% ng master equity (sa AUTO lot), ilalapit ito sa 5% at susunod ang TP (parehong 1:2).
+  Hal. equity $153, 0.01 lot: max SL ≈ $7.65, TP ≈ $15.30. Event log: "TREND SL: swing $… → $…".
+
+## v2.8.16 (build 2026-10-05.16)
+- **TREND: sariling risk limit 5% bawat trade** (Eugene; dati 2% ng risk settings). `trend.max_risk_pct` = 5.
+  Paalala: sa master na ~$153 at swing SL ~$28 (0.01 lot) = ~18.7% → haharangin pa rin; papasok kapag mas maliit
+  ang SL (≤ ~$7.6) o mas malaki ang master equity.
+
+## v2.8.15 (build 2026-10-05.15)
+- **PULLBACK reversal** (Eugene: "pag biglang may pullback, auto close ang naka-open, trend o conso man"): ang bagong
+  PULLBACK signal ay nagsasara na rin ng open TREND / PULLBACK / CONSO trades na KONTRA sa direksyon nito, at
+  binubura ang CONSO STOP sa side na iyon (dati TREND lang ang gumagawa nito). `pullback_reversal` (default ON).
+
+## v2.8.14 (build 2026-10-05.14)
+- **CONSO: walang risk-per-trade limit** (Eugene; hinarangan ulit: 5.66% > 5%). `conso.max_risk_pct` = 0 (off),
+  inilipat isang beses (settings schema 13). Para sa ordinary CONSO at NEWS CONSO. Ang TREND / PULLBACK ay nasa
+  risk settings pa rin. Ang naiwang safety: ARM / STOP, daily DD / TP lock, spread, news window, pares o wala.
+
+## v2.8.13 (build 2026-10-05.13)
+- **Walang kalahating CONSO grid** (Eugene: 2 BUY STOP, walang SELL STOP). Nangyari: lumabas na ang presyo sa ilalim
+  ng box bago nailagay ang grid, kaya ni-reject ng broker ang SELL STOP (dapat nasa ilalim ng presyo) at BUY STOP
+  lang ang naiwan, walang OCO partner. Ngayon:
+  - bago maglagay: kung nabasag na ang box (bid ≤ SELL STOP o ask ≥ BUY STOP) → hindi maglalagay, may dahilan sa
+    ⛔ line ("nabasag na pababa / pataas ang box");
+  - pagkalagay: kung isang side lang ang tinanggap sa master → buburahin lahat (walang kalahating grid).
+
+## v2.8.12 (build 2026-10-05.12)
+- **CONSO: sariling risk 5% bawat trade** (Eugene: "5% risk pra sa conso"; dati hinarangan ng RISK_PER_TRADE 4.86% >
+  2%). Ordinary CONSO at NEWS CONSO: max 5% ng equity bawat order (`conso.max_risk_pct`, default 5). Ang TREND /
+  PULLBACK ay sumusunod pa rin sa risk settings (2%).
+
+## v2.8.11 (build 2026-10-05.11)
+- **CONSO hindi na pinipigilan ng session** (Eugene: "basta may conso wag nlng pipigilan"): ang CONSO grid ay
+  ilalagay kahit labas sa Asia / Frankfurt / London / New York. Ang TREND / PULLBACK ay sumusunod pa rin sa sessions.
+  Ang safety na naiwan para sa CONSO: ARM / STOP, daily DD / TP lock, spread, news window, isang grid lang sabay.
+
+## v2.8.10 (build 2026-10-05.10)
+- **Kahit anong entry sa master, papasok din sa followers** (Eugene: 2 entry sa master, walang follower):
+  - CONSO grid / NEWS grid: dati, umaasa ang follower sa SARILI nitong pending order (iba ang presyo ng broker niya,
+    kaya puwedeng hindi ma-hit, o hindi na-place). Ngayon: pag na-fill ang master, ang follower na hindi pa na-fill
+    ay papasok agad sa MARKET (lot ng follower, parehong SL / TP $), at buburahin ang pending niya (walang doble).
+  - **COPY CHECK:** bawat master trade na 20 s na pero kulang ng follower: pulang mensahe sa event log + alert,
+    kasama ang dahilan (PAUSED, LOCKED, Algo Trading OFF, hindi konektado, order failed…). Isang beses bawat trade.
+- Tests: 2 bago.
+
+## v2.8.9 (build 2026-10-05.9)
+- **NEWS line sa itaas ng chart:** susunod na high-impact news, countdown, forecast / previous. Asul = malayo pa,
+  dilaw = < 1 oras, pula + kumikislap = NEWS WINDOW (naka-pause ang ordinary strategies). I-click → NEWS page.
+- **News results (NEWS page):** bawat high-impact news habang bukas ang app: forecast vs actual (TUGMA ±5% /
+  MAS MATAAS / MAS MABABA), galaw ng gold +5 / +10 / +30 min, range ng unang 10 min, at resulta ng NEWS trades
+  (CONSO / TREND, WIN / LOSS, P/L). Summary: forecast accuracy %, average na galaw, win rate. `news_results.py`,
+  saved sa news_results.json.
+
+## v2.8.8 (build 2026-10-05.8)
+- **Para sa VPS (walang magki-click):** NEWS → TREND naka-ON na by default (`follow_trend`).
+- **Hiwalay ang NEWS sa ordinary strategies:**
+  - 3 min bago ang news: isasara ang open ordinary trades (dati na) AT buburahin ang ordinary CONSO pending grid
+    (bago; wala na itong expiry kaya puwedeng ma-hit ng news spike).
+  - 30 min bago hanggang 10 min pagkatapos ng news: naka-pause ang ordinary TREND / PULLBACK / CONSO (news window ng
+    AUTO TRADE); kusang babalik pagkatapos, at maglalagay ulit ng CONSO grid kung READY pa ang box.
+  - News CONSO + News TREND: hiwalay na trades (source news / news_trend), sarado pagkalipas ng 10 min.
+
+## v2.8.7 (build 2026-10-05.7)
+- **CONSO walang expiration** (Eugene: "walang expiration ang conso"): ang BUY STOP / SELL STOP grid ay nananatili
+  hanggang ma-hit (OCO: buburahin ang kabila) o ma-cancel (reversal, STOP NEW TRADES, DISARM). Bagong setting
+  `conso.no_expiry` (default ON).
+- **NEWS: isara pagkalipas ng 10 min** (`time_exit_min`, default 10, 0 = off): ang na-trigger na news trade ay
+  isasara 10 minuto pagkabukas (master + followers).
+- **NEWS → TREND** (`follow_trend`, default OFF, nasa News Trade ⚙): kapag na-hit ang news stop sa master, may
+  kasunod na market trade sa parehong direksyon (parehong SL / TP $, master lot + lot ng followers), isang beses
+  bawat news. Isasara rin pagkalipas ng `time_exit_min`.
+- Tests: 3 bagong news / conso tests.
+
+## v2.8.6 (build 2026-10-05.6)
+- **CONSO: bagong pending grid habang READY pa ang box** (Eugene: "ok lng mag open prin ng pending order ang conso,
+  basta pag na hit ang isa close ang opposite"). Dati: isang grid lang bawat READY (kaya "signal … already
+  processed"). Ngayon: kapag tapos na ang dating grid (expired / cancelled / na-hit at sarado na) at READY pa rin,
+  maglalagay ulit ng BUY STOP + SELL STOP. OCO pa rin: kapag na-hit ang isa, buburahin ang kabila (bawat account).
+  Isang grid lang sabay; hindi habang may bukas pang CONSO trade. Habang naghihintay ang grid: ▶ berde sa strip.
+
+## v2.8.5 (build 2026-10-05.5)
+- **Bakit READY pero walang order:** ang dahilan (na nasa nakatagong STRATEGIES panel lang dati) ay nasa ilalim na ng
+  AUTO buttons sa itaas ng chart: ⛔ PULA = READY pero hindi papasok (MANUAL, AUTO TRADE OFF, hindi ARM, o ang gate
+  na humarang: session / risk / news / may pending CONSO grid…), ▶ BERDE = papasok / pumasok na.
+- **Pag-MANUAL ng strategy ay may confirm na:** dati, isang click lang sa umiilaw na button ay nag-MANUAL na
+  (ganito naging ○ TREND).
+- Tooltip ng MASTER: ano ang laman ng profile.
+
+## v2.8.4 (build 2026-10-05.4)
+- **Mas malaking chart:** tinago ang "NAKA-ON … score · … chart" indicator chips sa ilalim ng chart (isang beses;
+  maibabalik sa ⚙ LAYOUT → "Naka-ON na indicators"). Mas mataas na ang chart area (halos buong screen).
+
+## v2.8.3 (build 2026-10-05.3)
+- **STRATEGIES panel puwedeng itago** (default nakatago): mas malaki ang chart. ◧ PANEL sa itaas ng chart para
+  ipakita ulit. Ang AUTO buttons (TREND / PULLBACK / CONSO) sa itaas ng chart ay umiilaw na:
+  BERDE + kumikislap = READY, DILAW = MALAPIT, may ▲ / ▼ at % (tooltip = detalye).
+- **Balance card:** malaki na ang BALANCE (may account #), sa ilalim ang Equity at open P/L.
+- **CONSO laging AUTO:** ina-AUTO isang beses (settings schema 12); puwede pa ring gawing MANUAL sa ○ CONSO.
+
+## v2.8.2 (build 2026-10-05.2)
+- **Isang chart na lang:** tinanggal ang ⧉ 2 SCREEN at ↗ (pop-out) sa chart toolbar.
+- **Icon-only na menu:** ang sidebar at chart toolbar ay icon na lang (pangalan = tooltip kapag itinapat ang mouse).
+  ☰ sa itaas ng sidebar para ipakita / itago ulit ang mga pangalan (naaalala).
+- **Copier fix (RG Master EA CONSO / TREND hindi nakopya sa followers):**
+  - Kapag LOCKED ang master (daily DD / TP, hal. ang $20 / $60 preset ng v2.8.0), tuloy pa rin ang EA sa master
+    pero dati HINDI na kinokopya sa followers. Ngayon kinokopya pa rin (bagong checkbox sa Accounts,
+    "I-COPY pa rin kahit LOCKED ang master", default ON). Ang sariling daily lock ng follower ay masusunod pa rin.
+  - Bawat trade sa master na HINDI kinopya ay may paliwanag na sa event log (ibang symbol, magic wala sa listahan,
+    naka-off ang copy), isang beses bawat ticket.
+  - Trades na bukas na bago nag-start ang app: may warning na sa event log (dati tahimik lang).
+- Tests: 3 bagong copier tests.
+
+## v2.8.1 (build 2026-10-05.1)
+- **Copy EVERY trade on the master** (Eugene: "copy na lahat, kahit anong trade man - master EA, manual o terminal"):
+  trades of ANY EA on the master symbol (e.g. the REYGUN Master EA) are now copied to the followers like manual
+  trades: follower lot, same SL / TP $ distance, SL moves, partials and the close mirrored. The EA's trade on the
+  master is never modified. Accounts: "I-COPY din ang trades ng EA sa master" (on) + optional magic-number list
+  (empty = every EA). Journal kind `ea_mt5` with `source_magic`. Terminal trades are not copied twice.
+- **Leftover test order cleanup** (an `RGSC-TEST` pending order stayed in MT5 after a 📡 Test signal): an
+  `RGSC-TEST` order still pending after 30 s is deleted and logged. Nothing else is touched.
+- Paper: the test BUY LIMIT no longer triggers like a stop order.
+
+## v2.8.1 (build 2026-10-05.1)
+- **Leftover test order cleanup** (Eugene: an `RGSC-TEST` pending order was still in MT5 after a 📡 Test signal):
+  every account's orders are checked on each refresh; an `RGSC-TEST` order (our magic) still pending after 30 s is
+  deleted and logged ("naiwang test order … binura"). Nothing else is touched; not while a test is running.
+- Paper: the test BUY LIMIT no longer triggers like a stop order.
+
+## v2.8.0 (build 2026-10-04.2)
+- **MASTER** (Eugene: "ilagay mo na ang master sa terminal", "ilagay mo rin ang CVD"): the MT5 Master EA v1.90 (CVD preset)
+  in the terminal.
+  - New STRATEGIES profile MASTER, applied once when the strategies were NORMAL:
+    - TREND: H4 BOS + 2 M15 BOS + not extreme + new **M5 structure** + new **CVD** conditions.
+      CVD = sum of the M5 bar deltas (tick volume × (close − open) / (high − low)) over the last 8 strategy bars
+      (or the last 2 with cvd_mode turn2). Only M5 bars closed by the strategy bar's close are used.
+    - Swing SL, 1:2. PULLBACK RSI 30/70 + order block. CONSO ADX < 20 grid. Every strategy on AUTO.
+  - Sanity check on 6 months of M15 (2R, no protection): base +47R; + M5 structure +54R; + CVD +67R.
+  - AUTO TRADE MASTER settings (v4 migration, once): M15, max 3 open, unlimited per day, "no opposite" off.
+    - Each strategy its own trade (`Group.source`); only its own open trade or live CONSO grid blocks it.
+    - Reversal close: a fresh TREND signal closes older TREND / PULLBACK / CONSO trades against it and cancels the
+      CONSO stops on that side (once per signal).
+    - Early exit (m15_2bos) for TREND; re-entry after a TREND win (H4 window 30); secure 50% at 1R (TREND).
+    - CONSO trades are skipped by the position manager (EA: CSProtect off).
+  - Master account daily loss $20 / profit target $60 ($), once, only when no limit was set.
+- **Partial close safety:** a partial close is skipped on a leg whose lot cannot be split (0.5 × 0.01). Before, the
+  broker could round it up to the whole position.
+- **Delta Profile (buy vs sell)** plugin (LAYERS → VOLUME, on): split buy / sell profile, delta per row, ΔPOC, and who
+  is more aggressive. `Profile` gained `buy`, `sell_color` and `title`.
+- Tests: `tests/test_master.py` (16).
+
+## v2.7.9 (build 2026-10-04.1)
+- **📡 Test signal** (Accounts page; Eugene: "test signal ... para malaman kung may connectivity nga ang dalawa"):
+  - A REAL order to the master and every follower, through the same order_send route as every signal:
+    BUY LIMIT, minimum lot, 20% below the price, so it can never fill. Comment `RGSC-TEST`.
+  - It stays 5 s so you can see it in each MT5 Trade tab, then it is deleted and checked gone.
+  - Shows per account: sent / visible in MT5 / deleted, plus the send time in ms.
+  - Market closed (weekend): reported as "SARADO ANG MARKET" (retcode 10018) - the broker was reached.
+  - No ARM needed. Refused while HALTED; it never clears a halt. The 5 s wait is outside the MT5 lock (the chart keeps
+    updating). Only the test ticket is touched.
+
+## v2.7.8 (build 2026-10-03.4)
+- **Refined strategies** (Eugene: "yung iba bagsak na, kailangan i-refine"). Settings were picked on Mar-Jun 2026
+  and checked on Jul-Sep 2026 (months not used to pick them). Exits are walked on M5 bars, with $0.25 spread and the
+  NORMAL protection.
+  - **TREND:**
+    - The H4 BOS must be fresh: within the last 12 H4 bars (was 30).
+    - New KONTRA, required: no BUY when overbought (RSI ≥ 70), no SELL when oversold (RSI ≤ 30). This stops the
+      late entries.
+    - SL at the last swing, TP 1:2. Mar-Jun +25R, Jul-Sep +28R, max DD 10.6R. Before: +24R over all 6 months.
+  - **PULLBACK:**
+    - RSI dip + an unbroken M15 order block + order flow.
+    - MFI and doji are OFF: with them, it never once fired in 6 months.
+    - TP 1:2 (was 1.5). Mar-Jun +9R, Jul-Sep +8R, about 2 trades a week.
+  - **CONSO:** unchanged. It passed Eugene's MT5 Strategy Tester.
+  - Older NORMAL settings get this once. AGGRESSIVE / SCALP are untouched.
+- **MT5 EAs v1.20:**
+  - TREND and PULLBACK use the same rules, plus the NORMAL BE / lock.
+  - RANGE: M15 only, SL 1.5 ATR, TP at the middle of the range. Mar-Jun +9R, Jul-Sep +10R, 60% win.
+
+## v2.7.7 (build 2026-10-03.3)
+- **TREND SL at the last swing** (Eugene):
+  - The SL goes beyond the latest confirmed swing low (BUY) / high (SELL), plus 0.1 ATR.
+  - It stays between 0.5 and 4 ATR. If no swing is found, it falls back to 1.5 ATR. TP stays at 1:2.
+  - 6-month test (M15, NORMAL): 36% win, +16R with no protection, +26R with the NORMAL protection (BE at 1R,
+    lock 1.5R→0.5R, 1.8R→1R), max drawdown 10R. The old setup (1.5 ATR) made +22R.
+- Older settings switch once (NORMAL profile only; AGGRESSIVE / SCALP keep the ATR SL).
+- ⚙ TREND editor: SL mode (swing / atr), swing buffer, swing max.
+- MT5 EA TREND v1.10: same swing SL, plus the NORMAL profit protection.
+
+## v2.7.6 (build 2026-10-03.2)
+- **CONSO is MANUAL** (Eugene: "oo"). In a 6-month test of real gold prices the OCO breakout lost in every session
+  (15-28% win at 1:2, about -130R). It still shows on the chart and the card; switch it back to ● AUTO any time.
+- **AUTO TRADE sessions:** Asia and Frankfurt are added to London + New York (once; your later choice stays). In
+  the same test TREND did best in Asia (+11R).
+
+## v2.7.5 (build 2026-10-03.1)
+- **Frankfurt session** (Eugene): 06:00-14:00 UTC = 2:00-10:00 PM Manila. It has its own box on the chart and its
+  own chip in the header. The hour before London (2-3 PM Manila) now reads "Frankfurt session" (code FRANKFURT).
+  You can tick it in AUTO TRADE → Sessions.
+- **Strategy trades are no longer blocked by the analyser's required list:**
+  - In a replay of real gold prices, TREND (100% green) was blocked with "required: Displacement". That is the
+    analyser's BREAKOUT regime rule, not a TREND condition.
+  - Strategy signals now skip the analyser's required list (score, trigger, regime extras).
+  - Still checked: the HTF bias (NORMAL), session, news, risk, execution, max open and the structure conflict.
+
+## v2.7.4 (build 2026-10-02.6)
+- **Manual copy without touching the terminal** (Eugene: "khit ndi ako mag pindot s terminal ... un nrin gawin s
+  followers"): a manual trade on the master is copied even when trading is NOT armed. As long as the app is open
+  and connected, whatever you do on the master (open, SL / TP move, partial, close) the followers do too.
+  - Still not copied while the master is LOCKED (daily DD / TP lock); the event log says so.
+  - A pending order you place on the master is copied when it fills (it becomes a position).
+
+## v2.7.3 (build 2026-10-02.5)
+- **Manual trades are copied to the followers** (Eugene: "isama mo na rin ang manual na trade sa pag-copy"):
+  - A BUY / SELL you open by hand on the master MT5 (PC or phone; magic 0, master symbol) is copied to every follower
+    with the follower's fixed lot and the same SL / TP $ distance.
+  - From then on it is a normal copied trade: SL / TP moves, partial closes and the close on the master are mirrored.
+  - Not copied: other EAs' trades (magic ≠ 0), other symbols, trades already open when the app started.
+  - The position manager (BE / profit lock / trail) leaves the SL of your manual trade alone.
+  - ON by default; "I-COPY din ang MANUAL trades" checkbox on the Accounts page.
+
+## v2.7.2 (build 2026-10-02.4)
+- **Everything ON at start** (Eugene: "i-ON mo lahat pati ang news"):
+  - Trading + AUTO + NEWS TRADE switch on when the app opens.
+  - TREND, PULLBACK and CONSOLIDATION are all ● AUTO; older settings get it once. A strategy you set to ○ MANUAL
+    later stays MANUAL.
+  - "NEWS TRADE ON pagbukas" can be unticked in AUTO settings.
+- **Follower copy:** every follower that is left out of a trade now says why in the event log and journal, e.g.
+  "FOLLOWER LiteFinance: hindi kinopya (PAUSED / Algo Trading OFF / LOCKED / hindi konektado / walang lot)".
+  Pending orders (CONSO / NEWS) do the same.
+- **Account chips above the chart:** OFFLINE / PAUSED / LOCKED / ALGO OFF in red. Click a PAUSED or LOCKED chip to
+  resume / unlock.
+
+## v2.7.1 (build 2026-10-02.2)
+- **Order flow is ON in every strategy** (and in every profile). Older settings get it added; your other
+  conditions stay. Each strategy uses it for its own job:
+  - TREND: the stronger side must follow the trend (buyers ≥ +15% for BUY, sellers for SELL; last 3 candles).
+  - PULLBACK: buyers / sellers must be back at the end of the pullback (≥ 10%, last 2 candles).
+  - CONSOLIDATION: buyers and sellers balanced (|delta| < 15%, last 5 candles).
+- **Strategy cards (Market Overview)** show a line per strategy: "✓ / ✗ OF buyers +32% · kailangan buyers ≥15%".
+- No tick data yet (e.g. Backtest): order flow is not judged, so it does not block.
+
+## v2.7.0 (build 2026-10-02.1)
+- **Order flow in the strategies** (＋ idagdag in the ⚙ strategy panel, OFF by default):
+  - TREND "ORDER FLOW: mas malakas ang buyers / sellers": delta of the last 3 candles ≥ 15% of volume in the
+    trade direction.
+  - PULLBACK "ORDER FLOW: pumasok na ang buyers / sellers" at the end of the pullback (last 2 candles).
+  - CONSOLIDATION "ORDER FLOW balanse": |delta| < 15%.
+- **"Buyers vs Sellers" on the chart** (ON by default): BUYERS ▲ / SELLERS ▼ where the stronger side changes, plus
+  an ORDER FLOW bar on the STRATEGIES card.
+- **Fix:** the black window filled with "ConnectionAbortedError [WinError 10053]". It was harmless (the page cancelled
+  a request) and is no longer printed.
+
+## v2.6.7 (build 2026-10-01.22)
+- **AUTO ON pagbukas ng app is now the default** (Eugene: "i-ON mo na as default").
+  - Live: trading + AUTO switch on by themselves at every start and after every auto restart. Only the strategies
+    marked ● AUTO trade.
+  - Untick "AUTO ON pagbukas ng app" (Trading → AUTO TRADE settings, or in the AUTO confirm) to start in MANUAL.
+  - A HALT (daily loss / emergency stop) is still never cleared by itself.
+
+## v2.6.6 (build 2026-10-01.21)
+- **⚡ AUTO → confirm** now turns on trading + AUTO in one server step (`/api/auto/start`) and always says what
+  happened:
+  - "Hindi na-ON ang AUTO: …" or "AUTO ON, pero hindi pa makakapag-order: …".
+  - "Nag-OFF ulit ang AUTO: …" when it goes off again within a few seconds, with the reason.
+- **"Laging AUTO pagbukas ng app"** (checkbox in the AUTO confirm and in AUTO settings, OFF by default): when ON,
+  trading + AUTO switch on by themselves every time SuperChart starts. A HALT is never cleared.
+
 ## v2.6.5 (build 2026-10-01.20)
 - **Keep-alive:**
   - `run_superchart_live.bat` / `run_superchart_paper.bat` restart SuperChart by themselves 5 s after it stops

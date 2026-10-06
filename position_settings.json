@@ -1,0 +1,28 @@
+{
+  "enabled": true,
+  "require_armed": true,
+  "interval_s": 2.0,
+  "be_r": 1.0,
+  "be_usd": 0.0,
+  "be_offset": 0.2,
+  "profit_lock": [
+    [
+      1.5,
+      0.5
+    ],
+    [
+      1.8,
+      1.0
+    ]
+  ],
+  "trail_mode": "none",
+  "trail_start_r": 1.0,
+  "trail_atr_mult": 3.0,
+  "trail_tf": "M5",
+  "step_r": 1.0,
+  "structure_buffer": 0.3,
+  "swing_n": 2,
+  "partial_close": [],
+  "min_step": 0.05,
+  "version": 2
+}

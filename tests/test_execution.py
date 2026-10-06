@@ -57,3 +57,20 @@ def test_monitor_rows():
     m = hub.execution.monitor(0.01)
     st = {x["name"]: x["status"] for x in m["accounts"]}
     assert st["Master"] == "READY" and st["F1"] == "BLOCKED", st
+
+
+def test_skipped_follower_always_says_why():
+    """Eugene 2026-10-02: master traded, follower did not, nothing explained it. Every left-out follower is logged."""
+    from harness import make_tm
+    hub, tm = make_tm(n_followers=2)
+    tm.armed = True
+    tm.followers[1].paused = "repair failed 3x"
+    r = tm.open(1, 0.01, 5.0, 10.0, kind="manual")
+    assert r["ok"]
+    g = list(tm.groups.values())[-1]
+    assert "f1" in g.legs and "f2" not in g.legs
+    notes = " ".join(str(x) for x in getattr(hub, "notes", []))
+    assert "F2" in notes and "PAUSED" in notes, notes[:400]
+    assert tm.follower_skip_reason(tm.followers[0]) is None
+    tm.followers[0].cfg["enabled"] = False
+    assert tm.follower_skip_reason(tm.followers[0]) == ""

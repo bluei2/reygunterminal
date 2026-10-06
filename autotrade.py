@@ -28,7 +28,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(HERE, "auto_trade_settings.json")
 
 DEFAULTS = dict(
-    tf="M5",
+    tf="M15",                      # v2.8.0 MASTER: M15 (the MT5 Master EA timeframe)
+    auto_on_start=True,            # (Eugene, 2026-10-01: "i-ON mo na as default") trading + AUTO switch on by themselves
+                                   # when the app starts; untick "AUTO ON pagbukas ng app" to start in MANUAL
+    news_on_start=True,            # with auto_on_start: NEWS TRADE switches on too (Eugene, 2026-10-02: "i-ON mo lahat")
     strategies_only=True,          # (Eugene, 2026-10-01) "per strategy na tayo": AUTO trades ONLY the STRATEGIES set to
                                    # AUTO (TREND / PULLBACK / CONSOLIDATION); the sources below are ignored while True
     sources=["analyser"],          # "analyser" (Analyser Signals), "breakout" (Conso Breakout), "trendline" (TL Breakout),
@@ -48,10 +51,11 @@ DEFAULTS = dict(
     direction="both",              # both | buy | sell
     max_cautions=0,                # skip signals with more ⚠ than this (-1 = ignore cautions)
     min_score=0.0,                 # 0 = the analyser's own passing score
-    sessions=["London", "New York"],
+    sessions=["Asia", "Frankfurt", "London", "New York"],   # v2.7.6: TREND did best in Asia (6-month test)
     news_block=True,               # no entry inside the news warning window (News settings)
-    max_per_day=3,
-    max_open=1,                    # max open SuperChart trades at the same time
+    max_per_day=0,                 # 0 = unlimited (v2.8.0, Eugene: "unli na natin"); the daily loss / profit target
+                                   # of the master account (Accounts) stops the day
+    max_open=3,                    # max open SuperChart trades at the same time (MASTER: 3, one per strategy)
     max_spread=0.60,               # $; 0 = no limit
     regimes=[],                    # allowed market regimes (regime.py); empty = any
     no_countertrend=False,         # in TREND UP skip SELLs, in TREND DOWN skip BUYs
@@ -61,19 +65,51 @@ DEFAULTS = dict(
     reentry_minutes=30,            # an extra trade in the SAME direction (while one is open) only after this many
                                    # minutes since the last entry, and only with a fresh confirmation (still in trend
                                    # and the analyser score still passes). 0 = no waiting
+    # ---- MASTER (v2.8.0, Eugene 2026-10-04: "ilagay mo na ang master sa terminal") - the MT5 Master EA behaviour
+    master_mode=True,              # each STRATEGY its own trade: TREND, PULLBACK and CONSO may be open together
+                                   # (also in opposite directions); a strategy never opens a 2nd trade of its own
+    reversal=True,                 # a fresh TREND signal closes the older trades AGAINST it (and the CONSO stop
+    pullback_reversal=True,
+    align_mult=2.0,                # v2.8.22 (Eugene): TREND / PULLBACK lot x2 when H4 + H1 + M15 all agree (1 = off)
+    rev_cancel_conso=False,        # v2.8.19: a reversal does NOT cancel one side of a pending CONSO grid (keep the pair)        # v2.8.15: a fresh PULLBACK signal reverses too (closes the trades against it)
+    rev_close=["trend", "pullback", "conso"],   # orders on that side) of these strategies
+    trend_early_exit="m15_2bos",   # off | m15_bos | m15_2bos: close a TREND trade before its TP when the entry-TF
+                                   # structure breaks against it (the 2nd break in the last 32 bars)
+    conso_early_exit="off",
+    trend_reentry_win=30,          # after a TREND WIN, a new TREND entry in the same H4 trend is allowed while that
+                                   # H4 break is up to N H4 bars old (normally h4_window = 12). 0 = off
+    trend_secure_r=1.0,            # TREND: close trend_secure_pct % at +R (then break-even). 0 = off.
+    trend_secure_pct=50.0,         #   0.01 lot cannot be split: the trade then simply stays whole
+    conso_protect=False,           # CONSO trades: break-even / profit lock of the position manager (EA: off)
 )
+EXIT_MODES = ("off", "m15_bos", "m15_2bos")
 import market_hours  # noqa: E402
 
 SESSION_HOURS = market_hours.SESSIONS          # UTC, shared table (market_hours.SESSIONS / session_settings.json)
+
+
+SETTINGS_VERSION = 4       # v2: auto_on_start ON by default; v3: Asia + Frankfurt added to the sessions (once)
+                           # v4 (v2.8.0): MASTER once - M15, max 3 open, unlimited per day, no_opposite off
 
 
 def load_settings():
     s = json.loads(json.dumps(DEFAULTS))
     try:
         with open(SETTINGS_FILE) as f:
-            for k, v in json.load(f).items():
-                if k in s:
-                    s[k] = v
+            raw = json.load(f)
+        ver = int(raw.get("settings_version", 1) or 1)
+        if ver < 2:
+            raw.pop("auto_on_start", None)
+        if ver < 3 and isinstance(raw.get("sessions"), list) and raw["sessions"]:
+            raw["sessions"] = list(dict.fromkeys(raw["sessions"] + ["Asia", "Frankfurt"]))   # v3 (once)
+        if ver < 4:
+            # v2.8.0 MASTER (once): the MT5 Master EA setup. Opposite trades of DIFFERENT strategies are allowed
+            # (a reversal closes the older side), so the old "no opposite" rule is switched off.
+            raw.update(tf="M15", max_open=3, max_per_day=0, no_opposite=False, master_mode=True)
+            s["_migrate_master"] = True
+        for k, v in raw.items():
+            if k in s:
+                s[k] = v
     except (OSError, ValueError):
         pass
     return s
@@ -86,12 +122,27 @@ class AutoTrader:
         self.enabled = False                       # ALWAYS off at start
         self.settings = load_settings()
         self.log = deque(maxlen=60)
+        if self.settings.pop("_migrate_master", False):
+            self._migrate_master()
         self.done = set()                          # (source, signal time) already handled
         self.last_bar = None
         self.today = None
         self.count_today = 0
         self.running = True
         threading.Thread(target=self._loop, daemon=True).start()
+
+    def _migrate_master(self):
+        """v2.8.0 once: STRATEGIES -> MASTER (when they were NORMAL) and this file saved as v4."""
+        try:
+            import strategies as _st
+            changed = _st.migrate_to_master()
+            with open(SETTINGS_FILE, "w") as f:
+                json.dump(dict(self.settings, settings_version=SETTINGS_VERSION), f, indent=2)
+            self._note("warn", "MASTER setup (v2.8.0): M15 · max 3 open (1 bawat strategy) · walang limit kada araw · "
+                               "reversal close · early exit · secure 50% sa 1R"
+                       + (" · STRATEGIES = MASTER (TREND + M5 + CVD, PULLBACK 30/70, CONSO AUTO)" if changed else ""))
+        except Exception as e:
+            report("CONFIG_ERROR", "autotrade", "MASTER_MIGRATION_FAILED", e)
 
     # ------------------------------------------------------------------ control
     def set_enabled(self, on):
@@ -104,12 +155,28 @@ class AutoTrader:
             self._mark_existing()
         what = ", ".join(src for src, _ in self._plugins()) or "walang strategy na naka-AUTO"
         self._note("warn" if on else "info", f"AUTO TRADE {'ON' if on else 'OFF'}"
-                   + (f" · {self.settings['tf']} · {what} · max {self.settings['max_per_day']}/day" if on else ""))
+                   + (f" · {self.settings['tf']} · {what} · max {self.settings['max_per_day'] or 'walang limit'}/day" if on else ""))
         return dict(ok=True, enabled=self.enabled)
+
+    def start(self, reason="AUTO ON"):
+        """Trading ON + AUTO ON in one step (the confirm in the UI, or auto_on_start). A HALT is never cleared here."""
+        tm = self.tm
+        if getattr(tm, "halted", ""):
+            return dict(ok=False, enabled=False, armed=tm.armed, error=f"HALTED: {tm.halted}", halted=True)
+        if not tm.armed:
+            tm.set_armed(True)
+        if not tm.armed:
+            return dict(ok=False, enabled=False, armed=False, error="hindi ma-ON ang trading")
+        r = self.set_enabled(True)
+        ok, why = tm.can_trade()
+        r.update(armed=tm.armed, can_trade=ok, warning="" if ok else why)
+        if r.get("ok") and not ok:
+            self._note("warn", f"{reason}: AUTO ON pero hindi pa makakapag-order: {why}")
+        return r
 
     def update_settings(self, new):
         s = self.settings
-        for k in ("lot", "min_score", "max_spread"):
+        for k in ("lot", "min_score", "max_spread", "align_mult"):
             if k in new:
                 try:
                     s[k] = max(0.0, float(new[k]))
@@ -157,6 +224,10 @@ class AutoTrader:
             s["news_block"] = bool(new["news_block"])
         if "no_countertrend" in new:
             s["no_countertrend"] = bool(new["no_countertrend"])
+        if "news_on_start" in new:
+            s["news_on_start"] = bool(new["news_on_start"])
+        if "auto_on_start" in new:
+            s["auto_on_start"] = bool(new["auto_on_start"])
         if "strategies_only" in new:
             s["strategies_only"] = bool(new["strategies_only"])
         if "score_confirm" in new:
@@ -168,12 +239,27 @@ class AutoTrader:
                 s["reentry_minutes"] = max(0, int(float(new["reentry_minutes"])))
             except (TypeError, ValueError):
                 pass
+        for k in ("master_mode", "reversal", "conso_protect", "pullback_reversal", "rev_cancel_conso"):
+            if k in new:
+                s[k] = bool(new[k])
+        if isinstance(new.get("rev_close"), list):
+            s["rev_close"] = [x for x in new["rev_close"] if x in ("trend", "pullback", "conso")]
+        for k in ("trend_early_exit", "conso_early_exit"):
+            if new.get(k) in EXIT_MODES:
+                s[k] = new[k]
+        for k, lo, hi in (("trend_reentry_win", 0, 200), ("trend_secure_r", 0.0, 10.0), ("trend_secure_pct", 0.0, 100.0)):
+            if k in new:
+                try:
+                    v = float(new[k])
+                    s[k] = max(lo, min(hi, int(v) if isinstance(lo, int) else v))
+                except (TypeError, ValueError):
+                    pass
         if isinstance(new.get("regimes"), list):
             import regime as _rg
             s["regimes"] = [x for x in new["regimes"] if x in _rg.ALL]
         try:
             with open(SETTINGS_FILE, "w") as f:
-                json.dump(s, f, indent=2)
+                json.dump(dict(s, settings_version=SETTINGS_VERSION), f, indent=2)
         except OSError:
             pass
         self._mark_existing()
@@ -224,7 +310,10 @@ class AutoTrader:
                     return hub.read_at(bars[i].t + sec).bias or 0
                 except Exception:
                     return 0
-            return _st.signals(name, bars, cfg, bias_fn if name != "conso" else None, 60, mtf=_st.hub_mtf(hub))
+            S = _st.series(bars, _st.hub_mtf(hub))
+            if name == "trend":
+                cfg = self._trend_cfg(cfg, S, len(bars) - 2)
+            return _st.signals(name, bars, cfg, bias_fn if name != "conso" else None, 60, S=S)
         with self.hub.lock:
             ctx = self.hub.ctx()
             if src == "reversal":                  # AUTO TRADE's own R✓ / R? choice, not the chart setting
@@ -301,6 +390,10 @@ class AutoTrader:
             return                                     # wait for a new bar -> the previous one just closed
         self.last_bar = bars[-1].t
         closed_t = bars[-2].t
+        try:
+            self._early_exit(bars)                     # MASTER: the structure turned against an open trade
+        except Exception as e:
+            report("SIGNAL_ERROR", "autotrade", "EARLY_EXIT_FAILED", e)
         day = closed_t // 86400
         if day != self.today:
             self.today, self.count_today = day, 0
@@ -357,32 +450,221 @@ class AutoTrader:
                     bias = (hub.read_at(bars[i].t + sec).bias or 0) if name != "conso" else 0
                 except Exception:
                     bias = 0
-                e = _st.evaluate(name, bars, S, i, cfg[name], bias)
+                ncfg = self._trend_cfg(cfg[name], S, i) if name == "trend" else cfg[name]
+                e = _st.evaluate(name, bars, S, i, ncfg, bias)
                 if not e.get("ok") or (name != "conso" and e.get("side") != spell["side"]):
                     continue                           # not (or no longer) all green
+                # v2.8.20 (Eugene: "pag may entry lng sna ang pag close"): the REVERSAL (close the open TREND /
+                # PULLBACK / CONSO trades against the new signal) runs only when the new TREND / PULLBACK trade
+                # actually ENTERS - see after _consider below. A blocked signal closes nothing.
+                rev_who = "TREND" if name == "trend" else \
+                    "PULLBACK" if name == "pullback" and self.settings.get("pullback_reversal", True) else None
                 sg = dict(spell, score=e.get("score", spell.get("score")))
                 if name == "conso":
+                    # v2.8.6 (Eugene: "ok lng mag open prin ng pending order ang conso, basta pag na hit ang isa close
+                    # ang opposite"): while the box stays READY, a NEW grid (BUY STOP + SELL STOP, OCO) is placed once the
+                    # previous grid of this box is finished (expired / cancelled / filled and closed). One grid at a
+                    # time; never while a CONSO trade is still open.
+                    rounds = getattr(self, "_conso_round", {})
+                    self._conso_round = rounds
+                    rnd = rounds.get(key, 0)
+                    gate0 = getattr(hub, "gate", None)
+                    if gate0 is not None:
+                        ev0 = f"conso_r{rnd}" if rnd else (spell.get("event") or spell.get("kind") or "")
+                        sid0 = gate0.make_signal(src, self.settings["tf"], spell["t"], spell["side"] or 1, None, None,
+                                                 None, None, None, ev0, src)["signal_id"]
+                        if gate0.journal.seen.get(sid0):
+                            nt0 = getattr(hub, "newstrader", None)
+                            live = nt0 is not None and hasattr(nt0, "strategy_box_live") and nt0.strategy_box_live()
+                            own = [g for g in self.tm.groups.values() if getattr(g, "source", "") == src]
+                            if live or own:
+                                self._note_once(key, f"CONSO: naka-place na ang grid ng box na ito "
+                                                     f"({'may bukas na CONSO trade' if own else 'naghihintay ma-hit / mag-expire, OCO'})")
+                                continue
+                            if spell["t"] < getattr(self, "_conso_live_t", 0):
+                                continue               # an older box, superseded by a newer one: no new round
+                            rnd += 1
+                            rounds[key] = rnd
+                            self._note("info", f"CONSO: tapos na ang dating grid, READY pa rin ang box → bagong BUY STOP / "
+                                               f"SELL STOP (OCO), round {rnd + 1}")
+                    if rnd:
+                        sg["event"] = f"conso_r{rnd}"
                     sg["plan"] = e
                     sg.update(entry=e["buy_stop"], sl=e["buy_sl"], tp=e["buy_tp"])
                 else:
                     sg.update(entry=e["entry"], sl=e["sl"], tp=e["tp"])
                 self._consider(src, sg)
+                if rev_who and self.settings.get("master_mode", True):
+                    res0 = getattr(self, "_last_res", None)
+                    if res0 in ("BLOCKED_MAX_OPEN_POSITIONS", "BLOCKED_MAX_OPEN") and \
+                            any(g.side == -spell["side"] for g in self.tm.groups.values()):
+                        # the slots are taken by trades AGAINST the new signal: close them, then try the entry again
+                        self._reversal(spell["side"], key, who=rev_who)
+                        self._consider(src, sg)
+                    elif res0 == "trade":
+                        self._reversal(spell["side"], key, who=rev_who)
                 gate = getattr(hub, "gate", None)
                 sid = None
                 if gate is not None:
                     sid = gate.make_signal(src, self.settings["tf"], sg["t"], sg["side"] or 1, sg.get("entry"),
                                            sg.get("sl"), sg.get("tp"), sg.get("score"), sg.get("cautions"),
                                            sg.get("event") or sg.get("kind") or "", src)["signal_id"]
-                if sid and gate.journal.seen.get(sid):
-                    self.done.add(key)                 # it became a trade: this spell is finished
+                if sid and gate.journal.seen.get(sid) and name != "conso":
+                    self.done.add(key)                 # it became a trade: this spell is finished (CONSO: next grid)
             except Exception as ex:
                 from error_log import where
                 self._note("error", f"auto trade: strategy {name}: {where(ex)}")
+
+    # ------------------------------------------------------------------ MASTER (the MT5 Master EA behaviour)
+    def _trend_cfg(self, cfg, S, i):
+        """RE-ENTRY after a WIN (Master EA v1.40): the last closed TREND trade won and the H4 trend that paid is still
+        the latest H4 break -> that break may be up to trend_reentry_win H4 bars old (instead of h4_window)."""
+        win = int(self.settings.get("trend_reentry_win", 0) or 0)
+        if not self.settings.get("master_mode", True) or win <= int(cfg.get("h4_window", 12)) or i < 0:
+            return cfg
+        import strategies as _st
+        try:
+            h4 = _st.mtf_state(S, i, cfg.get("bos_htf", "H4"), win)
+        except Exception:
+            return cfg
+        if not h4 or not h4["last"] or h4["age"] is None:
+            return cfg
+        if not (cfg.get("h4_window", 12) <= h4["age"] < win):
+            return cfg                                 # still fresh (normal rule) or too old
+        if self._last_trend_win() != h4["last"]:
+            return cfg
+        return dict(cfg, h4_window=win, reentry=True)
+
+    def _last_trend_win(self):
+        """Direction of the last CLOSED TREND trade if it was a win (0 = lost / none / a TREND trade still open)."""
+        tm = self.tm
+        if any(getattr(g, "source", "") == "st_trend" for g in tm.groups.values()):
+            return 0
+        last = None
+        for e in list(tm.journal.entries.values()):
+            if e.get("strategy") != "st_trend" or e.get("status") != "closed" or e.get("pnl") is None:
+                continue
+            if last is None or (e.get("close_time") or 0) > (last.get("close_time") or 0):
+                last = e
+        return (last.get("side") or 0) if last and (last.get("pnl") or 0) > 0 else 0
+
+    def _reversal(self, d, key, who="TREND"):
+        """A fresh TREND signal in direction d closes the older trades of rev_close strategies that are AGAINST it,
+        and cancels the unfilled CONSO stop orders on that side. Once per TREND signal."""
+        s, tm = self.settings, self.tm
+        if not s.get("master_mode", True) or not s.get("reversal", True) or not d:
+            return
+        done = getattr(self, "_rev_done", None)
+        if done is None:
+            done = self._rev_done = set()
+        if key in done:
+            return
+        done.add(key)
+        srcs = {f"st_{n}" for n in s.get("rev_close", [])}
+        hit = [g for g in list(tm.groups.values()) if getattr(g, "source", "") in srcs and g.side == -d]
+        word = "UP" if d == 1 else "DOWN"
+        for g in hit:
+            r = tm.close_group(g.gid, 1.0, source=f"reversal: {who} {word}")
+            self._note("warn", f"REVERSAL {who} {word}: isinara ang {g.source[3:].upper()} "
+                               f"{'BUY' if g.side == 1 else 'SELL'} {g.gid}" + ("" if r.get("ok") else f" (FAILED: {r})"),
+                       decision="exit", side=g.side)
+        n = 0
+        nt = getattr(self.hub, "newstrader", None)
+        # v2.8.19 (Eugene: "nag cancel ung pending order na buy kahit wala pang na hit"): the CONSO grid stays a PAIR
+        # (BUY STOP + SELL STOP, OCO) on a reversal; one side is cancelled only when rev_cancel_conso is ON
+        if "st_conso" in srcs and nt is not None and hasattr(nt, "cancel_strategy_side") \
+                and self.settings.get("rev_cancel_conso", False):
+            n = nt.cancel_strategy_side(-d, f"REVERSAL {word}")
+            if n:
+                self._note("warn", f"REVERSAL {who} {word}: {n} CONSO {'SELL' if d == 1 else 'BUY'} STOP cancelled")
+        self.last_reversal = dict(t=time.time(), dir=d, closed=[g.gid for g in hit], cancelled=n)
+
+    def _early_exit(self, bars):
+        """EARLY EXIT (Master EA v1.50): on the bar that just closed, a break of structure on the AUTO TF AGAINST an
+        open TREND (or CONSO) trade closes it before its TP (m15_2bos: only the 2nd break in the last 32 bars)."""
+        s, tm = self.settings, self.tm
+        if not s.get("master_mode", True):
+            return
+        modes = {"st_trend": s.get("trend_early_exit", "off"), "st_conso": s.get("conso_early_exit", "off")}
+        if all(m == "off" for m in modes.values()) or len(bars) < 40:
+            return
+        import strategies as _st
+        closed = bars[:-1]
+        bos = _st._bos(closed)
+        b = bos[-1]
+        if not b:
+            return
+        n_dir = sum(1 for x in bos[-32:] if x == b)
+        for g in list(tm.groups.values()):
+            m = modes.get(getattr(g, "source", ""), "off")
+            if m == "off" or g.side != -b or (m == "m15_2bos" and n_dir < 2):
+                continue
+            r = tm.close_group(g.gid, 1.0, source=f"early exit: {s['tf']} BOS {'UP' if b == 1 else 'DOWN'}")
+            self._note("warn", f"EARLY EXIT {g.source[3:].upper()} {'BUY' if g.side == 1 else 'SELL'} {g.gid}: "
+                               f"{'2nd ' if m == 'm15_2bos' else ''}{s['tf']} BOS {'UP' if b == 1 else 'DOWN'} kontra sa trade"
+                       + ("" if r.get("ok") else f" (FAILED: {r.get('error')})"), decision="exit", side=g.side)
+
+    def _note_once(self, key, text):
+        """Log a CONSO waiting note once per spell (the strategy is re-checked every minute)."""
+        seen = getattr(self, "_once", {})
+        self._once = seen
+        if seen.get(key) != text:
+            seen[key] = text
+            self._note("info", f"AUTO skip st_conso: [BLOCKED_REENTRY] {text}", decision="skip", side=0, code="BLOCKED_REENTRY")
+
+    def _align_mult(self, side):
+        """v2.8.22 (Eugene: "0.01 pag H1/M15, pero pag H4/H1/M15 ang align 0.02 ... x2 pag align sa htf"): the lot
+        (master AND followers) is multiplied by align_mult when the H4, H1 and M15 structure all point the trade's way."""
+        m = float(self.settings.get("align_mult", 2.0) or 1.0)
+        if m <= 1.0 or not side:
+            return 1.0
+        st = getattr(self.hub, "states", None) or {}
+        ok = all(getattr(st.get(tf), "trend", 0) == side for tf in ("H4", "H1", "M15"))
+        return m if ok else 1.0
+
+    def _cap_sl(self, sg, name):
+        """TREND / PULLBACK stop: the strategy's own stop (TREND last swing), but never further than
+        `max_sl` (v2.8.23 Eugene: $20 price = 200 gold pips) and, when `max_risk_pct` > 0, never more than that % of the
+        master equity at the AUTO lot (v2.8.17). The TP keeps the same RR."""
+        try:
+            import strategies as _st
+            c = _st.load_settings().get(name, {})
+            cap_pct, max_sl = float(c.get("max_risk_pct", 0.0)), float(c.get("max_sl", 20.0))
+            risk = getattr(self.hub, "risk", None)
+            eq = float(self.tm.master.info.get("equity") or 0)
+            lot = float(self.settings["lot"])
+            cs = risk.contract_size()[0] if risk is not None else 100.0
+        except Exception:
+            return sg
+        side = sg["side"] or 1
+        sl_d = abs(sg["entry"] - sg["sl"])
+        lim = [max_sl] if max_sl > 0 else []
+        why = [f"max ${max_sl:g}"] if max_sl > 0 else []
+        if cap_pct > 0 and eq > 0 and lot > 0 and cs > 0:
+            lim.append(int(cap_pct / 100 * eq / (lot * cs) * 100) / 100)      # $ distance, rounded down to the cent
+            why.append(f"{cap_pct:g}% ng equity ${eq:.2f}")
+        max_d = min(lim) if lim else 0.0
+        if max_d <= 0 or sl_d <= max_d:
+            return sg
+        rr = abs(sg["tp"] - sg["entry"]) / sl_d if sg.get("tp") else 2.0
+        out = dict(sg, sl=round(sg["entry"] - side * max_d, 2), tp=round(sg["entry"] + side * max_d * rr, 2))
+        noted = getattr(self, "_slcap_noted", set())
+        self._slcap_noted = noted
+        if (name, sg.get("t")) not in noted:
+            noted.add((name, sg.get("t")))
+            self._note("info", f"{name.upper()} SL: ${sl_d:.2f} → ${max_d:.2f} ({' / '.join(why)}), "
+                               f"TP ${max_d * rr:.2f} (1:{rr:.1f})")
+        return out
+
+    def _cap_trend_sl(self, sg):                   # kept for older callers / tests
+        return self._cap_sl(sg, "trend")
 
     def _consider(self, src, sg):
         """SIGNAL -> auto-trade filters -> MASTER GATE (decision, risk, execution, duplicates, AUTO, ARM) -> ORDER.
         Every outcome has a machine-readable code and is written to the signal journal (trade_gate.py)."""
         tm, s = self.tm, self.settings
+        if src in ("st_trend", "st_pullback") and sg.get("entry") and sg.get("sl"):
+            sg = self._cap_sl(sg, src[3:])
         side = sg["side"] or 1                     # a pending straddle (side 0) is checked as its BUY STOP leg
         word = "BUY/SELL STOP" if sg.get("pending") else "BUY" if side == 1 else "SELL"
         tag = f"{word} {sg['entry']:.2f} ({src}{', score ' + str(round(sg['score'])) + '%' if sg.get('score') is not None else ''})"
@@ -392,8 +674,10 @@ class AutoTrader:
                                src) if gate else None
 
         strat_src = src.startswith("st_")
+        self._last_res = None                      # v2.8.20: "trade" or the block code, read by _strategies
 
         def skip(why, code="BLOCKED_SCORE"):
+            self._last_res = code
             # a strategy spell is retried while it stays green: journal / log a reason only when it changes
             last = getattr(self, "_skip_last", {})
             self._skip_last = last
@@ -414,7 +698,9 @@ class AutoTrader:
         # ---- auto-trade signal filters (your AUTO TRADE settings)
         if not sg.get("pending") and (s["direction"] == "buy" and side != 1 or s["direction"] == "sell" and side != -1):
             return skip(f"direction set to {s['direction']} only", "BLOCKED_DIRECTION")
-        ok, why = self._session_ok()
+        # v2.8.11 (Eugene: "basta may conso wag nlng pipigilan"): the CONSO grid is placed in ANY session; risk,
+        # spread, news window, ARM / daily lock and one-grid-at-a-time still apply
+        ok, why = (True, "") if src == "st_conso" else self._session_ok()
         if not ok:
             return skip(why, "BLOCKED_SESSION")
         waive = ()
@@ -432,8 +718,11 @@ class AutoTrader:
             import strategies as _st
             own_dir = not _st.load_settings().get("htf_filter", True)
             # a CONSOLIDATION straddle has no direction: neither the HTF bias nor a structure conflict applies
-            waive = ("trigger", "score", "min_confidence") + (("htf:range",) if sg.get("pending") or own_dir else ()) \
-                + (("htf:own",) if own_dir or sg.get("pending") else ())
+            # v2.8.18 (Eugene: "kahit against sa htf"): PULLBACK in both directions ignores the HTF bias and the
+            # structure conflict on every profile
+            pb_free = src == "st_pullback" and _st.load_settings().get("pullback", {}).get("any_dir", False)
+            waive = ("trigger", "score", "min_confidence") + (("htf:range",) if sg.get("pending") or own_dir or pb_free else ()) \
+                + (("htf:own",) if own_dir or sg.get("pending") or pb_free else ())
         if src == "reversal" and route and route["mode"] == "RANGE":
             # range mode: fade the edge with the arrow; both directions, but not against a clear HTF bias
             if s.get("reversal_confirmed_only", True) and not sg.get("confirmed"):
@@ -510,12 +799,26 @@ class AutoTrader:
             return skip(f"score {sg['score']:.0f}% < {s['min_score']:.0f}%", "BLOCKED_SCORE")
         if s["max_per_day"] and self.count_today >= s["max_per_day"]:
             return skip(f"max {s['max_per_day']} auto trades today reached", "BLOCKED_MAX_TRADES")
+        master = strat and s.get("master_mode", True)
+        if master:
+            # MASTER: each strategy its own trade - only its OWN open trade (or live CONSO grid) blocks it
+            own = [g for g in tm.groups.values() if getattr(g, "source", "") == src]
+            if own:
+                return skip(f"may bukas pang sariling trade ang {src[3:].upper()} ({own[0].gid})", "BLOCKED_REENTRY")
+            nt = getattr(self.hub, "newstrader", None)
+            live = bool(sg.get("pending") and nt is not None and hasattr(nt, "strategy_box_live")
+                        and nt.strategy_box_live())
+            if live and sg["t"] <= getattr(self, "_conso_live_t", 0):
+                return skip("may naka-pending pang CONSO grid", "BLOCKED_REENTRY")
+            replace_grid = live                       # a NEWER box than the live grid's: it replaces it
+        else:
+            replace_grid = False
         opp = [g for g in tm.groups.values() if g.side == -side]
-        if s.get("no_opposite", True) and opp:
+        if not master and s.get("no_opposite", True) and opp:
             return skip(f"may bukas na {'SELL' if side == 1 else 'BUY'} trade ({len(opp)}): bawal ang kontrang trade",
                         "BLOCKED_OPPOSITE_POSITION")
         same = [g for g in tm.groups.values() if g.side == side]
-        if same:
+        if same and not master:
             ok, why = self._reentry_ok(same, side, sg)
             if not ok:
                 return skip(why, "BLOCKED_REENTRY")
@@ -533,6 +836,7 @@ class AutoTrader:
         # ---- the master gate: every remaining gate, in order, for this exact order
         res = gate.evaluate(sig, "auto", float(s["lot"]), waive=waive)
         if not res["allowed"]:
+            self._last_res = res["block_code"]
             return self._note("info", f"AUTO skip {tag}: [{res['block_code']}] {res['block_reason']}",
                               decision="skip", side=side, code=res["block_code"], signal_id=sig["signal_id"])
         lot = res["lot"]
@@ -542,9 +846,19 @@ class AutoTrader:
                 return skip("pending orders need the News Trader engine (not available)", "BLOCKED_EXECUTION")
             import strategies as _st
             ccfg = _st.load_settings()["conso"]
-            r = nt.place_box(sg["plan"], float(lot), time.time() + int(ccfg["expiry_bars"]) * TF_SECONDS[s["tf"]],
-                             label=f"CONSO {s['tf']}")
+            # v2.8.7 (Eugene: "walang expiration ang conso"): the grid stays until it is hit (OCO) or cancelled
+            exp = 0 if ccfg.get("no_expiry", True) else time.time() + int(ccfg["expiry_bars"]) * TF_SECONDS[s["tf"]]
+            if replace_grid and hasattr(nt, "cancel_strategy_boxes"):
+                # v2.8.20 (Eugene: "mapapalitan ang lumang conso box"): a NEW CONSO box replaces the old pending
+                # grid (no CONSO trade is open here: that case was skipped above)
+                k = nt.cancel_strategy_boxes("pinalitan ng bagong CONSO box")
+                if k:
+                    self._note("warn", f"CONSO: bagong box → binura ang lumang grid ({k} pending order)")
+            r = nt.place_box(sg["plan"], float(lot), exp,
+                             label=f"CONSO {s['tf']}" + (f" #{sg['event'][6:]}" if str(sg.get("event", "")).startswith("conso_r") else ""))
             if r.get("ok"):
+                self._last_res = "trade"
+                self._conso_live_t = sg["t"]          # the box whose grid is live now (older boxes are superseded)
                 self.count_today += 1
                 gate.journal.mark_trade(sig["signal_id"], r.get("eid"), res["setup_id"])
                 self._note("signal", f"AUTO CONSO BOX {sg['plan']['box_low']:.2f}-{sg['plan']['box_high']:.2f} → "
@@ -554,13 +868,23 @@ class AutoTrader:
             else:
                 self._note("error", f"AUTO CONSO BOX FAILED: {r.get('error')}", decision="error", code="EXECUTION_ERROR")
             return
+        mult = self._align_mult(side) if strat else 1.0
+        if mult != 1.0:
+            lot = round(float(lot) * mult, 2)
+            tag += f" · ALIGN H4·H1·M15 x{mult:g}"
+        cap = None
+        if src in ("st_trend", "st_pullback"):    # the strategy's own risk % (0 = off), x the aligned lot
+            import strategies as _st
+            cap = float(_st.load_settings().get(src[3:], {}).get("max_risk_pct", 0.0)) * mult
         r = tm.open(side, float(lot), sl_d, tp_d, kind="auto",
                     note=f"{src} signal, SL ${sl_d:.2f} TP ${tp_d:.2f}" + (f" · lot {', '.join(res['lot_notes'])}"
                                                                           if res["lot_notes"] else ""),
                     request_id=sig["signal_id"],                   # the same signal never trades twice
                     meta=dict(signal_id=sig["signal_id"], setup_id=res["setup_id"], gate_confidence=res["confidence"],
-                              gate_stages=res["stages"]))
+                              gate_stages=res["stages"], strategy=src if strat else None,
+                              lot_mult=mult if mult != 1.0 else None, risk_pct_cap=cap))
         if r.get("ok"):
+            self._last_res = "trade"
             self.count_today += 1
             gate.journal.mark_trade(sig["signal_id"], r.get("gid"), res["setup_id"])
             self._note("signal", f"AUTO {tag} → sent · SL ${sl_d:.2f} TP ${tp_d:.2f} · lot {lot} · "

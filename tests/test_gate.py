@@ -315,3 +315,50 @@ def test_auto_min_score_drives_the_analyser_arrows_it_trades():
     at.settings["min_score"] = 50
     at._signals("analyser", p, [], "M5")
     assert seen["min"] == 50.0 and p.obj.params == {"min_score": 0.0, "x": 1}    # chart setting untouched
+
+
+def test_auto_start_arms_and_enables_in_one_step_but_never_clears_a_halt():
+    from autotrade import AutoTrader
+    hub, tm, g = setup(score=40.0)
+    at = AutoTrader(tm)
+    at.running = False
+    hub.autotrader = at
+    tm.armed = False
+    r = at.start()
+    assert r["ok"] and at.enabled and tm.armed, r
+    at.set_enabled(False)
+    tm.armed = False
+    tm.halted = "DAILY DD 12:00:00"
+    r = at.start()
+    assert not r["ok"] and r.get("halted") and not tm.armed and not at.enabled
+    tm.halted = ""
+    assert at.update_settings({"auto_on_start": True})["settings"]["auto_on_start"] is True
+
+
+def test_auto_on_start_is_on_by_default_old_files_too():
+    import json
+    import autotrade as A
+    assert A.DEFAULTS["auto_on_start"] is True
+    with open(A.SETTINGS_FILE, "w") as f:
+        json.dump(dict(auto_on_start=False, lot=0.02), f)                 # an older file (no settings_version)
+    s = A.load_settings()
+    assert s["auto_on_start"] is True and s["lot"] == 0.02
+    with open(A.SETTINGS_FILE, "w") as f:
+        json.dump(dict(auto_on_start=False, settings_version=2), f)       # switched OFF on purpose later
+    assert A.load_settings()["auto_on_start"] is False
+    import os
+    os.remove(A.SETTINGS_FILE)
+
+
+def test_strategy_trade_not_blocked_by_analyser_required_list():
+    """STRATEGIES: all strategy conditions green = trade. The analyser's own required list (score, trigger, regime
+    extras like BREAKOUT -> displacement) does not block it; the HTF bias (NORMAL) and hard blockers still do."""
+    hub, tm, g = setup(score=50.0, trigger=False)
+    hub.decision.settings["required"] = list(hub.decision.settings["required"]) + ["displacement"]
+    r = g.evaluate(sig(g, src="st_trend"), "auto", 0.01)
+    assert r["allowed"], (r["block_code"], r["block_reason"])
+    r2 = g.evaluate(sig(g, src="analyser", t=int(time.time()) // 300 * 300 - 300), "auto", 0.01)
+    assert not r2["allowed"]                                       # the analyser signal still needs them
+    hub3, tm3, g3 = setup(bias=-1)
+    r3 = g3.evaluate(sig(g3, side=1, src="st_trend"), "auto", 0.01)
+    assert r3["block_code"] == "BLOCKED_STRUCTURE", r3["block_code"]   # against the HTF bias: still blocked

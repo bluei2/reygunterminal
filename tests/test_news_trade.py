@@ -99,3 +99,129 @@ def test_too_early_does_nothing_and_close_can_be_off():
     nt2._cycle()
     cycle(tm2)
     assert len(tm2.groups) == 1 and len(news_orders(tm2.master)) == 2
+
+
+def _fill_buy_on_master(tm, nt):
+    """Simulate: the master's news BUY STOP is hit (pending gone, a position with the same comment)."""
+    b = tm.master.backend
+    o = next(x for x in news_orders(tm.master) if x["comment"].endswith("B0"))
+    b.call("cancel_order", o["ticket"])
+    r = b.c_open_market(tm.master.symbol, 1, 0.01, 5.0, 10.0, o["comment"])
+    b.positions_[r["ticket"]]["magic"] = __import__("mt5_ops").MAGIC
+    time.sleep(0.01)
+    tm.refresh()
+    nt._cycle()
+    return r["ticket"]
+
+
+def test_v287_news_fill_follow_trend_and_time_exit():
+    hub, tm, nt = setup(follow_trend="true", time_exit_min=10, close_before_news="false")
+    tm.set_armed(True)
+    nt.set_enabled(True)
+    nt._cycle()
+    assert len(news_orders(tm.master)) == 2
+    _fill_buy_on_master(tm, nt)
+    src = sorted(getattr(g, "source", "") for g in tm.groups.values())
+    assert src == ["news", "news_trend"], (src, [t for _, t in hub.notes][-5:])
+    trend = next(g for g in tm.groups.values() if g.source == "news_trend")
+    assert trend.side == 1 and "f1" in trend.legs                     # followers get the TREND too
+    nt._cycle()
+    assert len([g for g in tm.groups.values() if g.source == "news_trend"]) == 1   # only once
+    for g in tm.groups.values():                                     # 10 minutes later
+        g.created -= 601
+    nt._cycle()
+    cycle(tm, 3)
+    assert not [g for g in tm.groups.values() if g.source in ("news", "news_trend")], [t for _, t in hub.notes][-4:]
+    assert any("10 min na" in t for _, t in hub.notes)
+
+
+def test_v287_follow_trend_can_be_off():
+    hub, tm, nt = setup(close_before_news="false", follow_trend="false")
+    tm.set_armed(True)
+    nt.set_enabled(True)
+    nt._cycle()
+    _fill_buy_on_master(tm, nt)
+    assert not [g for g in tm.groups.values() if g.source == "news_trend"]
+    assert nt.settings["time_exit_min"] == 10
+
+
+def test_v287_conso_grid_has_no_expiry():
+    hub, tm, nt = setup()
+    tm.set_armed(True)
+    plan = dict(box_high=2652.0, box_low=2648.0, buy_stop=2652.5, sell_stop=2647.5, sl_dist=5.0, tp_dist=10.0, levels=1)
+    r = nt.place_box(plan, 0.01, 0, label="CONSO M15")
+    assert r["ok"], r
+    st = next(s for s in nt.events.values() if s.get("kind") == "strategy")
+    st["t"] -= 10 * 3600                                             # hours later: still there
+    tm.refresh(); nt._cycle()
+    assert st["stage"] == "placed" and len([o for o in news_orders(tm.master) if "B" in o["comment"]]) >= 1
+
+
+
+def test_v288_follow_trend_on_by_default_and_ordinary_conso_grid_cancelled_before_news():
+    hub, tm, nt = setup(secs_to_news=100)
+    assert nt.settings["follow_trend"] is True
+    tm.set_armed(True)
+    plan = dict(box_high=2652.0, box_low=2648.0, buy_stop=2652.5, sell_stop=2647.5, sl_dist=5.0, tp_dist=10.0, levels=1)
+    assert nt.place_box(plan, 0.01, 0, label="CONSO M15")["ok"]
+    grid = next(s for s in nt.events.values() if s.get("kind") == "strategy")
+    ordinary = [o for o in news_orders(tm.master) if grid["eid"] in o["comment"]]
+    assert len(ordinary) == 2
+    nt.set_enabled(True)
+    nt._cycle()                                                     # 100 s before the news
+    assert not [o for o in news_orders(tm.master) if grid["eid"] in o["comment"]], "ordinary CONSO grid still there"
+    assert grid["stage"] == "done"
+    news = [o for o in news_orders(tm.master) if grid["eid"] not in o["comment"]]
+    assert len(news) == 2                                           # the NEWS conso is placed
+    assert any("ordinary CONSO" in t for _, t in hub.notes)
+
+
+def test_v2810_follower_enters_at_market_when_the_master_fills():
+    """Master BUY STOP filled, follower's own BUY STOP not (its broker price did not reach it) -> follower MARKET BUY,
+    its pending orders of that grid cancelled (no double entry)."""
+    hub, tm, nt = setup(close_before_news="false", follow_trend="false")
+    tm.set_armed(True)
+    nt.set_enabled(True)
+    nt._cycle()
+    f = tm.followers[0]
+    assert len(news_orders(f)) == 2
+    _fill_buy_on_master(tm, nt)
+    g = next(g for g in tm.groups.values() if g.source == "news")
+    assert "f1" in g.legs, [t for _, t in hub.notes][-5:]
+    fp = f.backend.positions_[g.legs["f1"]]
+    assert fp["side"] == 1 and abs((fp["open"] - fp["sl"]) - (g.m_open - g.m_sl if hasattr(g, "m_open") else fp["open"] - fp["sl"])) < 0.5
+    assert not news_orders(f), news_orders(f)                        # BUY STOP replaced + SELL STOP (OCO) cancelled
+    nt._cycle()
+    assert len(f.backend.positions_) == 1                            # never twice
+
+
+def test_v2810_copy_check_reports_a_missing_follower():
+    from harness import make_tm
+    hub, tm = make_tm(1)
+    tm.set_armed(True)
+    tm.followers[0].paused = "test"
+    r = tm.open(1, 0.01, 5.0, 10.0)
+    assert r.get("ok"), r
+    g = tm.groups[r["gid"]]
+    assert "f1" not in g.legs
+    g.created -= 30
+    tm.copy_audit(); tm.copy_audit()
+    msgs = [t for _, t in hub.notes if "COPY CHECK" in t]
+    assert len(msgs) == 1 and "PAUSED" in msgs[0], msgs
+
+
+def test_v2813_no_half_grid_when_the_price_already_left_the_box():
+    import types
+    hub, tm, nt = setup()
+    tm.set_armed(True)
+    mid = (hub.last_tick.bid + hub.last_tick.ask) / 2
+    plan = dict(box_high=mid + 6.0, box_low=mid + 2.0, buy_stop=mid + 6.5, sell_stop=mid + 1.5, sl_dist=5.0, tp_dist=10.0,
+                levels=2, step=1.5)                                   # the price is already BELOW the box
+    r = nt.place_box(plan, 0.01, 0, label="CONSO M15")
+    assert not r["ok"] and "nabasag na pababa" in r["error"], r
+    assert not news_orders(tm.master)
+    plan = dict(box_high=mid + 2.0, box_low=mid - 2.0, buy_stop=mid + 2.5, sell_stop=mid - 2.5, sl_dist=5.0, tp_dist=10.0,
+                levels=2, step=1.5)                                   # price inside the box: full grid
+    r = nt.place_box(plan, 0.01, 0, label="CONSO M15 b")
+    assert r["ok"], r
+    assert len(news_orders(tm.master)) == 4

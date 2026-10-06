@@ -1,0 +1,324 @@
+{
+  "adx.ADX": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "analyser_signals.AnalyserSignals": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "atr_exits.ATRExits": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "atr_pane.ATRPane": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "bollinger.BollingerBands": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "cci.CCI": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "conso_breakout.ConsoBreakoutAlert": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "conso_breakout.ConsoBreakoutSignals": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "consolidation.ConsolidationBox": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "cvd.CVD": {
+    "chart": true,
+    "score": true,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "donchian.DonchianChannel": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "ema.EMAPair": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "ema_cross.EMACrossM5": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "ema_ribbon.EMARibbon": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "fibonacci.AutoFib": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "ichimoku.Ichimoku": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "intermarket_vote.IntermarketVote": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M1",
+    "chart_tfs": []
+  },
+  "keltner.KeltnerChannel": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "macd.MACD": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "mfi.MFI": {
+    "chart": true,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "obv.OBV": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "order_blocks.OrderBlocks": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "order_flow.OrderFlowDelta": {
+    "chart": true,
+    "score": true,
+    "params": {},
+    "vote_tf": "M5",
+    "chart_tfs": []
+  },
+  "period_separator.PeriodSeparator": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "pivots.PivotPoints": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "premium_discount.PremiumDiscount": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "prev_day_levels.PrevDayLevels": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "psar.ParabolicSAR": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "reversal_signals.ReversalSignals": {
+    "chart": true,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "rsi.RSI": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "sessions.TradingSessions": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "sma.SMASet": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "smc_overlay.SMCOverlay": {
+    "chart": false,
+    "score": true,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "smc_ready_alert.SMCReadyAlert": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "stochastic.Stochastic": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "strategy_signals.ConsolidationStrategy": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "strategy_signals.PullbackStrategy": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "strategy_signals.TrendStrategy": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "supertrend.Supertrend": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "tpsl_map.TPSLMap": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "trendline_breakout.TrendlineBreakout": {
+    "chart": true,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "volume.Volume": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "volume_profile.VolumeProfile": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "vwap.DailyVWAP": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "vwap_tpsl.VWAPBandsTPSL": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  },
+  "williams_r.WilliamsR": {
+    "chart": false,
+    "score": false,
+    "params": {},
+    "vote_tf": "M15",
+    "chart_tfs": []
+  }
+}

@@ -5,11 +5,11 @@ REM KEEP-ALIVE: if SuperChart stops (crash, MT5 hiccup) it restarts by itself af
 REM ON what was ON (trading / AUTO / NEWS) - only after an unexpected stop of less than 10 minutes.
 REM Close THIS window to really stop it. Errors go to crash_log.txt.
 title REYGUN SuperChart (live)
-python superchart.py --mode live --symbol XAUUSD_ph
+python superchart.py --mode live --symbol XAUUSDs
 :loop
 echo.
 echo [%date% %time%] SuperChart stopped. Restarting in 5 s... (close this window to stop)
 echo [%date% %time%] SuperChart stopped - auto restart>> crash_log.txt
 timeout /t 5 /nobreak >nul
-python superchart.py --mode live --symbol XAUUSD_ph --resume --no-window
+python superchart.py --mode live --symbol XAUUSDs --resume --no-window
 goto loop

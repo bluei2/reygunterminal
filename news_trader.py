@@ -52,6 +52,9 @@ DEFAULTS = dict(
     # before the news: close every OPEN SuperChart trade (never other EAs / manual MT5 trades)
     close_before_news=True,
     close_before_sec=180,       # close this many seconds before the release (>= place_before_sec)
+    # v2.8.7 (Eugene): after the release
+    follow_trend=True,          # (v2.8.8 default ON, Eugene: VPS, walang magki-click) news BUY/SELL STOP fills on the master -> also a market TREND trade in that direction
+    time_exit_min=10,           # close every news trade (news fill + its TREND) this many minutes after it opened (0 = off)
     # no consolidation box: "distance" = BUY STOP / SELL STOP at price +/- nobox_offset | "skip" = no trade
     nobox_mode="distance",
     nobox_offset=3.0,           # $ from the mid price to each stop when there is no box
@@ -90,6 +93,9 @@ def clean_settings(new, old):
             s[k] = new[k]
     if "close_before_news" in new:
         s["close_before_news"] = new["close_before_news"] in (True, "true", "1", 1, "on", "yes")
+    if "follow_trend" in new:
+        s["follow_trend"] = new["follow_trend"] in (True, "true", "1", 1, "on", "yes")
+    s["time_exit_min"] = max(0, min(240, int(s.get("time_exit_min", 10))))
     s["levels"] = max(1, min(5, int(s["levels"])))
     s["lookback"] = max(10, min(300, int(s["lookback"])))
     s["swing"] = max(1, min(5, int(s["swing"])))
@@ -117,6 +123,7 @@ class NewsTrader:
         self.events = {}                     # event key -> state dict
         self.closed_for = set()              # events whose "close open trades" step already ran
         self.lock = threading.RLock()
+        self.grid_off_for = set()
         self._cleaned = False
         self.running = True
         threading.Thread(target=self._loop, daemon=True).start()
@@ -277,6 +284,20 @@ class NewsTrader:
                         tm.close_everything(source="news")
                         self.hub.note("warn", f"NEWS {ev['currency']} {ev['title']} in {int(secs)}s: closed {n} open "
                                               f"SuperChart trade(s) before the news")
+                # 1b) v2.8.8: the ORDINARY CONSO grid (no expiry) is cancelled before the news, so a news spike does not
+                #     fill it; the ordinary strategies are paused by the AUTO TRADE news window and come back by
+                #     themselves after it (the CONSO grid is placed again if its box is still READY)
+                if self.enabled and 0 < secs <= self.settings["close_before_sec"] and key not in self.grid_off_for:
+                    self.grid_off_for.add(key)
+                    n = 0
+                    for sx in self.events.values():
+                        if sx.get("kind") == "strategy" and sx.get("stage") == "placed":
+                            n += self._cancel_event(sx, None)
+                            sx["stage"] = "done"
+                            sx["note"] = (sx.get("note") or "") + " · cancelled before the news"
+                    if n:
+                        self.hub.note("warn", f"NEWS {ev['currency']} {ev['title']} in {int(secs)}s: cancelled {n} ordinary "
+                                              f"CONSO pending order(s) before the news")
                 # 2) the pending orders
                 if st is None and self.enabled and 0 < secs <= self.settings["place_before_sec"]:
                     st = self.events[key] = dict(key=key, eid=uuid.uuid4().hex[:4], title=ev["title"],
@@ -300,6 +321,26 @@ class NewsTrader:
             for st in self.events.values():
                 if st["stage"] == "placed":
                     self._watch(st)
+        self._time_exit()
+
+    def _time_exit(self):
+        """v2.8.7: news trades (the triggered news stop + its TREND follow-up) are closed N minutes after they opened."""
+        n_min = int(self.settings.get("time_exit_min") or 0)
+        if n_min <= 0:
+            return
+        tm = self.tm
+        now = time.time()
+        for gid, g in list(tm.groups.items()):
+            if getattr(g, "source", "") not in ("news", "news_trend") or g.closing or now - g.created < n_min * 60:
+                continue
+            done = getattr(self, "_timed_out", set())
+            self._timed_out = done
+            if gid in done:
+                continue
+            done.add(gid)
+            r = tm.close_group(gid, 1.0, source=f"news time exit {n_min}m")
+            self.hub.note("warn", f"NEWS {'TREND ' if g.source == 'news_trend' else ''}{'BUY' if g.side == 1 else 'SELL'} {gid}: "
+                                  f"{n_min} min na → isinara" + ("" if r.get("ok", True) else f" (FAILED: {r.get('error')})"))
 
     def _risk_block(self, box):
         """MASTER TRADING + the risk engine's hard limits (daily DD / target, total DD, config) before any order."""
@@ -313,8 +354,10 @@ class NewsTrader:
         try:
             lv = self._levels(box)
             L = lv[0] if lv else None
+            import strategies as _st                # v2.8.12: the news CONSO uses the CONSO risk % too (default 5)
+            cap = float(_st.load_settings().get("conso", {}).get("max_risk_pct", 0.0))
             bl = risk.hard_blockers(L["side"] if L else 0, "news", float(self.settings["master_lot"]),
-                                    L["sl_d"] if L else None, L["tp_d"] if L else None) if L else []
+                                    L["sl_d"] if L else None, L["tp_d"] if L else None, risk_pct_cap=cap) if L else []
         except Exception as e:
             return f"risk check failed ({e.__class__.__name__})"
         # a straddle is both sides by design, and open trades were closed just before (close_before_news)
@@ -334,14 +377,36 @@ class NewsTrader:
         over = dict(buffer_pips=buf / (self.settings["pip"] or 0.1), levels=max(1, int(plan.get("levels", 1))),
                     step=float(plan.get("step", 1.5)), sl_mode="fixed", sl_fixed=plan["sl_dist"],
                     max_sl=0.0, tp_mode="fixed", tp_fixed=plan["tp_dist"])
+        # v2.8.13 (Eugene: "bakit dalawang buy stop, nasaan ang sell stop"): a STOP order must be beyond the price.
+        # When the price has already left the box (below the SELL STOP / above the BUY STOP) that side cannot be
+        # placed and the broker rejects it, leaving a one-sided grid without its OCO partner. -> never a half grid.
+        lv = self._levels(box, over)
+        tk = self.hub.last_tick
+        if tk is not None and lv:
+            top_sell = max(L["entry"] for L in lv if L["side"] == -1)
+            low_buy = min(L["entry"] for L in lv if L["side"] == 1)
+            if tk.bid <= top_sell:
+                return dict(ok=False, error=f"nabasag na pababa ang box: bid {tk.bid:.2f} ≤ SELL STOP {top_sell:.2f} "
+                                            f"(hindi na mailalagay ang SELL STOP)")
+            if tk.ask >= low_buy:
+                return dict(ok=False, error=f"nabasag na pataas ang box: ask {tk.ask:.2f} ≥ BUY STOP {low_buy:.2f} "
+                                            f"(hindi na mailalagay ang BUY STOP)")
         with self.lock:
-            key = f"BOX|{plan['box_low']}|{plan['box_high']}|{int(expire_at)}"
+            key = f"BOX|{plan['box_low']}|{plan['box_high']}|{int(expire_at)}|{label}"
             if key in self.events:
                 return dict(ok=False, error="this box was already placed")
             st = self.events[key] = dict(key=key, eid=uuid.uuid4().hex[:4], title=label, currency="", t=time.time(),
-                                         expire_at=float(expire_at), stage="new", note="", orders={}, triggered={},
+                                         expire_at=float(expire_at or 0), stage="new", note="", orders={}, triggered={},
                                          groups={}, kind="strategy")
             self._place(st, box, over, master_lot)
+            sides = {o["side"] for o in st["orders"].get(tm.master.id, [])}
+            if st["stage"] == "placed" and sides != {1, -1}:
+                # only one side made it on the master (broker rejected the other): no OCO partner -> cancel it all
+                n = self._cancel_event(st, None)
+                st["stage"] = "failed"
+                st["note"] = f"isang side lang ang tinanggap ng broker → binura ang {n} order (walang kalahating grid)"
+                self.hub.note("error", f"STRATEGY BOX {label}: {st['note']} · " + "; ".join(st.get("errors") or []))
+                return dict(ok=False, eid=st["eid"], error=st["note"] + " · " + "; ".join(st.get("errors") or []))
         return dict(ok=st["stage"] == "placed", eid=st["eid"], note=st["note"], error="; ".join(st.get("errors") or []))
 
     # ------------------------------------------------------------------ placing
@@ -351,9 +416,11 @@ class NewsTrader:
         if tm.master.connected and not tm.master.locked:
             out.append((tm.master, float(master_lot if master_lot is not None else self.settings["master_lot"])))
         for f in tm.followers:
-            if f.connected and f.cfg.get("enabled") and not f.locked and f.cfg.get("lot") and \
-                    (tm.paper or f.info.get("trade_allowed", True)):
+            why = tm.follower_skip_reason(f) if hasattr(tm, "follower_skip_reason") else None
+            if why is None:
                 out.append((f, float(f.cfg["lot"])))
+            elif why:
+                self.hub.note("warn", f"FOLLOWER {f.name}: walang pending order ({why})")
         return out
 
     def _place(self, st, box, over=None, master_lot=None):
@@ -426,13 +493,45 @@ class NewsTrader:
                 else:
                     o["state"] = "gone"
         # expiry (news: minutes after the release; a strategy box: its own expire_at)
-        if time.time() > (st.get("expire_at") or st["t"] + self.settings["cancel_after_min"] * 60):
+        no_exp = st.get("kind") == "strategy" and not st.get("expire_at")      # CONSO grid: no expiry (v2.8.7)
+        if not no_exp and time.time() > (st.get("expire_at") or st["t"] + self.settings["cancel_after_min"] * 60):
             n = self._cancel_event(st, None)
             st["stage"] = "done"
             st["note"] += f" · expired, {n} unfilled cancelled"
             self.hub.note("info", f"NEWS TRADE {st['title']}: window over, cancelled {n} unfilled pending order(s)")
         elif all(o.get("state") for lst in st["orders"].values() for o in lst):
             st["stage"] = "done"
+
+    def cancel_strategy_side(self, side, why=""):
+        """MASTER reversal: cancel the unfilled CONSO grid orders on one side (side = +1 BUY STOPs / -1 SELL STOPs)
+        of every live strategy box. -> number of orders cancelled."""
+        n = 0
+        with self.lock:
+            for st in self.events.values():
+                if st.get("kind") == "strategy" and st.get("stage") == "placed":
+                    k = self._cancel_event(st, None, side=side)
+                    if k:
+                        st["note"] = (st.get("note") or "") + f" · {why}: {k} {'BUY' if side == 1 else 'SELL'} STOP cancelled"
+                    n += k
+        return n
+
+    def cancel_strategy_boxes(self, why=""):
+        """v2.8.20: cancel every live CONSO grid (both sides, every account) - a new CONSO box replaces it."""
+        n = 0
+        with self.lock:
+            for st in self.events.values():
+                if st.get("kind") == "strategy" and st.get("stage") == "placed":
+                    n += self._cancel_event(st, None)
+                    st["stage"] = "done"
+                    st["note"] = (st.get("note") or "") + f" · {why}"
+        return n
+
+    def strategy_box_live(self):
+        """A CONSO grid that still has unfilled orders (one grid at a time per strategy, like the EA)."""
+        with self.lock:
+            return any(st.get("kind") == "strategy" and st.get("stage") == "placed" and
+                       any(not o.get("state") for lst in st["orders"].values() for o in lst)
+                       for st in self.events.values())
 
     def _cancel_event(self, st, only_acc=None, side=None):
         n = 0
@@ -454,6 +553,7 @@ class NewsTrader:
 
     def _on_fill(self, st, a, o, p):
         tm = self.tm
+        follow = None
         word = "BUY" if o["side"] == 1 else "SELL"
         st["triggered"][a.id] = o["side"]
         n = self._cancel_event(st, a.id, side=-o["side"])            # OCO on this account
@@ -467,7 +567,8 @@ class NewsTrader:
                 gid = f"N{st['eid']}{'B' if o['side'] == 1 else 'S'}{o['level']}"
                 g = Group(gid, o["side"], time.time(), {"master": p["ticket"]}, p["volume"], p["sl"], p["tp"], p["open"],
                           sl_dist=abs(p["open"] - p["sl"]) if p["sl"] else 0.0,
-                          tp_dist=abs(p["tp"] - p["open"]) if p["tp"] else 0.0)
+                          tp_dist=abs(p["tp"] - p["open"]) if p["tp"] else 0.0,
+                          source="st_conso" if st.get("kind") == "strategy" else "news")
                 for fid, ft in st["groups"].get(key + ":early", {}).items():
                     g.legs[fid] = ft                                   # followers that filled before the master
                 tm.groups[gid] = g
@@ -480,9 +581,15 @@ class NewsTrader:
                                       abs(p["open"] - p["sl"]) if p["sl"] else 0.0,
                                       abs(p["tp"] - p["open"]) if p["tp"] else 0.0, names,
                                       score_snapshot(self.hub.read), tm.paper, news=tm._news_context(),
-                                      kind="strategy" if st.get("kind") == "strategy" else "news")
+                                      kind="strategy" if st.get("kind") == "strategy" else "news",
+                                      strategy="st_conso" if st.get("kind") == "strategy" else "news")
                 except Exception as e:
                     self.hub.note("error", f"journal: {e}")
+                follow = st.get("kind") != "strategy" and self.settings.get("follow_trend") and not st.get("followed")
+                if follow:
+                    st["followed"] = True
+                    follow = (o["side"], abs(p["open"] - p["sl"]) if p["sl"] else 0.0,
+                              abs(p["tp"] - p["open"]) if p["tp"] else 0.0)
             else:
                 gid = st["groups"].get(key)
                 g = tm.groups.get(gid) if gid else None
@@ -491,6 +598,61 @@ class NewsTrader:
                     tm._save_groups()
                 else:
                     st["groups"].setdefault(key + ":early", {})[a.id] = p["ticket"]
+        if a is tm.master:
+            self._followers_follow_master(st, o, p)
+        if a is tm.master and isinstance(follow, tuple):
+            side, sl_d, tp_d = follow
+            r = tm.open(side, float(self.settings["master_lot"]), sl_d, tp_d, kind="news",
+                        note=f"TREND pagkatapos ng news {st.get('title', '')}", meta=dict(strategy="news_trend"))
+            self.hub.note("signal" if r.get("ok") else "error",
+                          f"NEWS → TREND {'BUY' if side == 1 else 'SELL'}: " + (f"pumasok ({r.get('gid')}), isasara pagkalipas ng "
+                          f"{self.settings.get('time_exit_min')} min" if r.get("ok") else f"hindi pumasok: {r.get('error')}"))
+
+    def _followers_follow_master(self, st, o, p):
+        """v2.8.10 (Eugene: "kahit anong entry sa master dapat mag trade din sa follower"): when a pending order
+        (CONSO grid / news grid) fills on the MASTER, every follower that has not filled the same order yet does
+        not wait for its own pending order (its broker's price may never reach it, or it was never placed):
+        its unfilled order for that level + its opposite orders (OCO) are cancelled and it enters at MARKET,
+        follower lot, same SL / TP $ distance as the master. A follower whose order cannot be cancelled (it is
+        filling right now) is left to its own fill, so it is never entered twice."""
+        tm = self.tm
+        key = f"{o['side']}:{o['level']}"
+        gid = st["groups"].get(key)
+        g = tm.groups.get(gid) if gid else None
+        if g is None:
+            return
+        sl_d = round(abs(p["open"] - p["sl"]), 2) if p["sl"] else 0.0
+        tp_d = round(abs(p["tp"] - p["open"]), 2) if p["tp"] else 0.0
+        for f in tm.followers:
+            if f.id in g.legs:
+                continue                                          # already filled on its own (early fill)
+            why = tm.follower_skip_reason(f)
+            if why is not None:
+                if why:
+                    self.hub.note("warn", f"FOLLOWER {f.name}: hindi sumunod sa master fill {gid} ({why})")
+                continue
+            mine = st["orders"].get(f.id, [])
+            same = [x for x in mine if not x.get("state") and x["side"] == o["side"] and x["level"] == o["level"]]
+            blocked = False
+            for x in same:
+                r = f.backend.call("cancel_order", x["ticket"])
+                if r.get("ok"):
+                    x["state"] = "replaced"
+                else:
+                    blocked = True                                # probably filling now: _watch attaches it
+            if blocked:
+                continue
+            self._cancel_event(st, f.id, side=-o["side"])        # OCO on this follower
+            r = f.backend.call("open_market", f.symbol, o["side"], f.cfg["lot"], sl_d, tp_d,
+                               f"{TAG}{st['eid']}{'B' if o['side'] == 1 else 'S'}{o['level']}")
+            if r.get("ok"):
+                with tm.lock:
+                    g.legs[f.id] = r["ticket"]
+                    tm._save_groups()
+                self.hub.note("info", f"FOLLOWER {f.name}: sumunod sa master fill {gid} → MARKET "
+                                      f"{'BUY' if o['side'] == 1 else 'SELL'} @ {r.get('price')}")
+            else:
+                self.hub.note("error", f"FOLLOWER {f.name}: hindi makapasok sa master fill {gid}: {r.get('error')}")
 
     # ------------------------------------------------------------------ view
     def state(self):

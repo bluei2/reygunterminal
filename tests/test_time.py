@@ -62,7 +62,9 @@ def test_smc_at_equals_truncated_history():
 
 def test_session_boundaries_utc():
     d = lambda h, wd=2: datetime(2026, 9, 21 + wd, h, 0, tzinfo=timezone.utc)   # 2026-09-21 is a Monday
-    assert MH.session_code(d(6)) == "ASIA" and MH.session_code(d(7)) == "LONDON"
+    assert MH.session_code(d(5)) == "ASIA" and MH.session_code(d(7)) == "LONDON"
+    assert MH.session_code(d(6)) == "FRANKFURT"                  # 14:00-15:00 Manila: Frankfurt, before London
+    assert MH.in_session("Frankfurt", 13) and not MH.in_session("Frankfurt", 14)
     assert MH.session_code(d(12)) == "OVERLAP" and MH.session_code(d(16)) == "NEW_YORK"
     assert MH.session_code(d(21)) == "OFF" and MH.session_code(d(10, wd=5)) == "WEEKEND"
     assert MH.in_session("London", 7) and not MH.in_session("London", 16)

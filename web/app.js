@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const $ = (s) => document.querySelector(s);
-  const BUILD = "2026-10-01.20";          // same as BUILD in superchart.py
+  const BUILD = "2026-10-05.26";          // same as BUILD in superchart.py
   const TFS = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"];
   const LS = (() => { try { return window.localStorage; } catch (e) { return null; } })();
   const lsGet = (k, d) => { try { return (LS && LS.getItem(k)) || d; } catch (e) { return d; } };
@@ -356,9 +356,37 @@
         if (y1 === null || y2 === null) return;
         const top = Math.min(y1, y2), hh = Math.max(1, Math.abs(y2 - y1) - 1);
         const bw = (r[2] / maxV) * maxW;
+        const x0 = left === null ? paneW - bw : left;
+        if (pf.buy) {                                    // DELTA PROFILE: buyers (green) | sellers (red) + the row delta
+          const b = Math.max(0, Math.min(r[2], pf.buy[i] || 0)), wb = r[2] > 0 ? bw * b / r[2] : 0;
+          ctx.fillStyle = hexA(pf.color, hl.has(i) ? 0.75 : 0.45);
+          ctx.fillRect(x0, top, wb, hh);
+          ctx.fillStyle = hexA(pf.scolor || "#ef4444", hl.has(i) ? 0.75 : 0.45);
+          ctx.fillRect(x0 + wb, top, bw - wb, hh);
+          if (hl.has(i)) { ctx.strokeStyle = hexA(pf.hcolor, 0.9); ctx.strokeRect(x0, top, bw, hh); }
+          const d = 2 * b - r[2];
+          if (r[2] > maxV * 0.08 && hh >= 7) {
+            const a = Math.abs(d), txt = (d > 0 ? "+" : d < 0 ? "-" : "") + (a >= 1e6 ? (a / 1e6).toFixed(1) + "M" : a >= 1e3 ? (a / 1e3).toFixed(1) + "K" : a.toFixed(0));
+            ctx.font = "10px ui-monospace, monospace";
+            ctx.fillStyle = d >= 0 ? (pf.color || "#22c55e") : (pf.scolor || "#ef4444");
+            ctx.textAlign = left === null ? "right" : "left";
+            ctx.fillText(txt, left === null ? x0 - 3 : x0 + bw + 3, top + hh / 2 + 3);
+            ctx.textAlign = "left";
+          }
+          return;
+        }
         ctx.fillStyle = hexA(hl.has(i) ? pf.hcolor : pf.color, hl.has(i) ? 0.55 : 0.28);
-        ctx.fillRect(left === null ? paneW - bw : left, top, bw, hh);
+        ctx.fillRect(x0, top, bw, hh);
       });
+      if (pf.title) {
+        ctx.font = "bold 11px system-ui, sans-serif";
+        const w = ctx.measureText(pf.title).width + 12;
+        const x = Math.max(4, paneW - w - 4);
+        ctx.fillStyle = "rgba(15,23,42,0.78)";
+        ctx.fillRect(x, 26, w, 18);
+        ctx.fillStyle = /SELLERS/.test(pf.title) ? (pf.scolor || "#ef4444") : /BUYERS/.test(pf.title) ? (pf.color || "#22c55e") : "#cbd5e1";
+        ctx.fillText(pf.title, x + 6, 39);
+      }
     }
     ctx.restore();
   }
@@ -545,7 +573,7 @@
     loadChart(true);
   }
   // ---- 2 SCREEN: a second chart with its own timeframe (candles, price-chart indicators, levels, arrows)
-  let split = lsGet("rg_split", "0") === "1" && !TF_FROM_URL;
+  let split = false;                                  // v2.8.2: one chart only (2nd screen removed)
   let tf2 = lsGet("rg_tf2", "H1");
   if (!TFS.includes(tf2)) tf2 = "H1";
   let c2 = null, c2Candles = null, c2Markers = null, c2Lines = new Map(), c2PLs = [], c2Key = "", c2Busy = false, c2Fit = true;
@@ -603,13 +631,13 @@
   }
   function setSplit(on) {
     split = on;
-    if (!TF_FROM_URL) lsSet("rg_split", on ? "1" : "0");
+    if (!TF_FROM_URL) lsSet("rg_split", "0");
     $("#chart2Box").hidden = !on;
     $("#chartsRow").classList.toggle("split", on);
-    $("#btnSplit").classList.toggle("on", on);
+    $("#btnSplit")?.classList.toggle("on", on);
     if (on) { renderC2Tfs(); c2Fit = true; loadC2(); }
   }
-  $("#btnSplit").addEventListener("click", () => setSplit(!split));
+  $("#btnSplit")?.addEventListener("click", () => setSplit(!split));
   $("#c2Tfs").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-tf2]");
     if (!b || b.dataset.tf2 === tf2) return;
@@ -619,7 +647,7 @@
     renderC2Tfs(); loadC2();
   });
   $("#btnTrade2").addEventListener("click", () => setAutoTf(tf2));
-  $("#btnPop").addEventListener("click", () => {
+  $("#btnPop")?.addEventListener("click", () => {
     const t = split ? tf2 : (tf === "H1" ? "M5" : "H1");
     window.open(`/?tf=${t}`, `reygun_${t}`, "width=1400,height=900");
   });
@@ -924,8 +952,9 @@
     if (s.account) {
       const a = s.account;
       const open = s.positions.reduce((t, p) => t + p.pnl, 0);
-      $("#eqVal").textContent = money(a.equity);
-      $("#eqSub").innerHTML = `bal ${money(a.balance)} · open <span class="${open >= 0 ? "c-bull" : "c-bear"}">${open >= 0 ? "+" : ""}${money(open)}</span>`;
+      $("#eqLabel").textContent = "Balance" + (a.login ? " · #" + a.login : "");
+      $("#eqVal").textContent = money(a.balance);
+      $("#eqSub").innerHTML = `Equity <b>${money(a.equity)}</b> · open <span class="${open >= 0 ? "c-bull" : "c-bear"}">${open >= 0 ? "+" : ""}${money(open)}</span>`;
     } else {
       $("#eqVal").textContent = "--";
       $("#eqSub").textContent = s.live ? "no account info" : "not available in " + s.source.toLowerCase();
@@ -1489,9 +1518,9 @@
   // ---- accounts page
   const RISK_FIELDS = (a, isMaster, paper) => `
       <label class="pf"><span>Daily DD limit</span><span class="pair"><input type="number" step="0.1" min="0" data-k="daily_dd" value="${esc(a.daily_dd)}">
-        <select data-k="dd_mode"><option ${a.dd_mode === "%" ? "selected" : ""}>%</option><option ${a.dd_mode === "$" ? "selected" : ""}>$</option></select></span></label>
+        <select data-k="dd_mode"><option ${a.dd_mode === "%" ? "selected" : ""}>%</option><option ${a.dd_mode === "$" ? "selected" : ""}>$</option><option ${a.dd_mode === "pips" ? "selected" : ""}>pips</option></select></span></label>
       <label class="pf"><span>Daily TP target</span><span class="pair"><input type="number" step="0.1" min="0" data-k="daily_tp" value="${esc(a.daily_tp)}">
-        <select data-k="tp_mode"><option ${a.tp_mode === "%" ? "selected" : ""}>%</option><option ${a.tp_mode === "$" ? "selected" : ""}>$</option></select></span></label>
+        <select data-k="tp_mode"><option ${a.tp_mode === "%" ? "selected" : ""}>%</option><option ${a.tp_mode === "$" ? "selected" : ""}>$</option><option ${a.tp_mode === "pips" ? "selected" : ""}>pips</option></select></span></label>
       <label class="pf"><span>When hit, close</span><select data-k="close_scope">
         <option value="superchart" ${a.close_scope !== "all" ? "selected" : ""}>only SuperChart trades (default)</option>
         <option value="all" ${a.close_scope === "all" ? "selected" : ""}>ALL trades on the account (incl. other EAs + manual)</option></select></label>
@@ -1501,6 +1530,10 @@
     if (!T || T.disabled) return;
     if (!acctDraft) acctDraft = JSON.parse(JSON.stringify(T.config));
     const m = acctDraft.master;
+    $("#copyManual").checked = acctDraft.copy_manual !== false;
+    $("#copyEA").checked = acctDraft.copy_ea !== false;
+    $("#copyMagics").value = acctDraft.copy_magics ?? "";
+    $("#copyLocked").checked = acctDraft.copy_when_locked !== false;
     $("#acctMode").textContent = T.paper ? "paper mode: orders are simulated" : "LIVE mode: real orders";
     let html = `<div class="acard master" data-id="master">
       <div class="ahead"><span class="role">MASTER</span><input class="aname" data-k="name" value="${esc(m.name)}">
@@ -1544,6 +1577,10 @@
       const f = out.followers[+card.dataset.idx];
       card.querySelectorAll("[data-k]").forEach((el) => { f[el.dataset.k] = val(el); });
     });
+    out.copy_manual = $("#copyManual").checked;
+    out.copy_ea = $("#copyEA").checked;
+    out.copy_magics = $("#copyMagics").value;
+    out.copy_when_locked = $("#copyLocked").checked;
     return out;
   }
 
@@ -1557,7 +1594,7 @@
       el.innerHTML = !a.connected ? `● ${esc(a.status)} ${a.error ? "· " + esc(a.error) : ""}` :
         `● ${a.login ? "#" + esc(a.login) + " " : ""}${esc(a.server || "")} · bal ${money(a.balance)} · eq ${money(a.equity)} · day
          <b class="${pl >= 0 ? "c-bull" : "c-bear"}">${pl == null ? "-" : (pl >= 0 ? "+" : "") + money(pl)}</b>
-         ${a.dd_amount ? ` · DD at -${money(a.dd_amount)}` : ""}${a.tp_amount ? ` · TP at +${money(a.tp_amount)}` : ""}
+         ${a.dd_amount ? ` · DD at -${money(a.dd_amount)}${a.dd_mode === "pips" ? ` (${fx(a.daily_dd, 0)} pips)` : ""}` : ""}${a.tp_amount ? ` · TP at +${money(a.tp_amount)}${a.tp_mode === "pips" ? ` (${fx(a.daily_tp, 0)} pips)` : ""}` : ""}
          ${!T.paper && !a.trade_allowed ? ' · <span class="c-warn">Algo Trading OFF</span>' : ""}
          ${a.locked ? ` · <span class="c-bear">LOCKED: ${esc(a.locked)}</span>` : ""}
          ${a.login_error ? ` · <span class="c-bear">${esc(a.login_error)}</span>` : ""}
@@ -1608,6 +1645,27 @@
       } else notes.push(`${name}: ${r.error || "not found"}`);
     }
     $("#acctSaved").textContent = notes.length ? notes.join(" · ") + " → click Save accounts" : "no connected followers yet";
+  });
+
+  // SIGNAL TEST (v2.7.9): a real order on every MT5 that can never fill, shown 5 s, then deleted
+  $("#btnSignalTest").addEventListener("click", async () => {
+    if (!confirm("TEST SIGNAL\n\nMagpapadala ng TOTOONG order sa bawat MT5 (master + followers):\n" +
+      "BUY LIMIT, pinakamaliit na lot, 20% BABA sa presyo (hindi mapupuno).\n" +
+      "Makikita mo ito ng 5 segundo sa Trade tab ng MT5 bilang RGSC-TEST, tapos buburahin.\n\nItuloy?")) return;
+    const box = $("#connTest");
+    box.hidden = false;
+    box.innerHTML = '<p class="muted">Nagpapadala ng test order sa bawat MT5… tingnan ang Trade tab ng MT5 (RGSC-TEST) · ~5-10 segundo</p>';
+    const r = await api("/api/trade/signaltest", { hold: 5 }).catch((e) => ({ ok: false, error: String(e), results: [] }));
+    if (!r.results || !r.results.length) { box.innerHTML = `<p class="c-bear">${esc(r.error || "test failed")}</p>`; return; }
+    const ready = r.results.filter((x) => x.ok).length;
+    const head = r.ok ? "✓ CONNECTED - umabot ang signal sa lahat ng MT5" :
+      r.market_closed ? "⏸ SARADO ANG MARKET - umabot sa broker pero tinanggihan (normal tuwing weekend). I-test ulit pagbukas." :
+      "⚠ MAY HINDI NAKATANGGAP";
+    box.innerHTML = `<div class="ct-head ${r.ok ? "c-bull" : "c-warn"}">${head} · ${ready}/${r.results.length} account(s)${r.paper ? " · PAPER mode (simulated)" : ""}</div>` +
+      r.results.map((a) => `<div class="ct-acct ${a.ok ? "ok" : a.skipped ? "skip" : "bad"}">
+        <div class="ct-name"><b>${a.ok ? "✓" : a.skipped ? "–" : "✗"} ${esc(a.name)}</b> <span class="muted">${esc(a.role)}${a.symbol ? " · " + esc(a.symbol) : ""}${a.ms_send != null ? " · send " + a.ms_send + " ms" : ""}</span></div>
+        <div class="ct-checks">${(a.checks || []).map((c) => `<div class="${c.ok ? "" : "c-bear"}"><span>${c.ok ? "✓" : "✗"} ${esc(c.name)}</span><i>${esc(c.detail)}</i></div>`).join("")}</div>
+      </div>`).join("");
   });
 
   $("#btnTestConn").addEventListener("click", async () => {
@@ -2014,9 +2072,49 @@
       if (w.active) tn.innerHTML = `⚠ <b>${esc(w.currency)} ${esc(w.title)}</b> ${w.mins >= 0 ? "in " + dur(w.mins * 60) : "released " + dur(-w.mins * 60) + " ago"} · high-impact news: spread can widen and SL can slip`;
       voiceEventCheck(w);
     }
+    const ln = $("#tsNews");                         // v2.8.9: news line above the chart -> NEWS page
+    if (ln) {
+      if (!w) ln.hidden = true;
+      else {
+        ln.hidden = false;
+        const soon = w.mins >= 0 && w.mins <= 60;
+        ln.className = "ts-newsline" + (w.active ? " hot" : soon ? " soon" : "");
+        ln.innerHTML = `📰 <b>NEWS</b> ${esc(w.currency)} <b>${esc(w.title)}</b> · ${w.mins >= 0 ? "in " + dur(w.mins * 60) : "lumabas " + dur(-w.mins * 60) + " na"}`
+          + (w.forecast ? ` · forecast <b>${esc(w.forecast)}</b>` : "") + (w.previous ? ` · prev ${esc(w.previous)}` : "")
+          + (w.active ? " · ⚠ NEWS WINDOW: naka-pause ang ordinary strategies" : "") + ' <span class="muted">› NEWS</span>';
+      }
+    }
     if (!$("#view-news").hidden && N) renderCalendar();
+    if (!$("#view-news").hidden && Date.now() - (window.rgNrAt || 0) > 10000) { window.rgNrAt = Date.now(); loadNewsResults(); }
+  }
+  async function loadNewsResults() {
+    let d;
+    try { d = await api("/api/news/results"); } catch (e) { return; }
+    if (!d || d.disabled) { $("#nrCard").hidden = true; return; }
+    $("#nrCard").hidden = false;
+    const s = d.summary || {};
+    const k = (lbl, val, sub) => `<div class="nr-k"><span>${lbl}</span><b>${val}</b><i>${sub || ""}</i></div>`;
+    $("#nrSum").innerHTML = k("Na-record na news", s.events ?? 0, "habang bukas ang app")
+      + k("Forecast accuracy", s.forecast_acc != null ? s.forecast_acc + "%" : "--", s.compared ? `${s.tugma}/${s.compared} tugma (±5%)` : "wala pang actual")
+      + k("Galaw ng gold 10 min", s.avg_move10 != null ? "$" + fx(s.avg_move10) : "--", "average")
+      + k("NEWS trades", s.win_rate != null ? s.win_rate + "% win" : "--", s.trades ? `${s.wins}/${s.trades} · P/L ${money(s.pnl)}` : "wala pang sarado");
+    const rows = d.rows || [];
+    if (!rows.length) { $("#nrList").innerHTML = '<p class="muted small">Wala pang na-record. Ire-record ang bawat high-impact news na lalabas habang bukas ang app (forecast, actual, galaw ng gold sa +5 / +10 / +30 min, at resulta ng news trades).</p>'; return; }
+    const mv = (r, m) => { const p = r.marks[m]; if (p == null || r.px0 == null) return '<span class="muted">…</span>'; const d_ = p - r.px0; return `<span class="${d_ >= 0 ? "c-bull" : "c-bear"}">${d_ >= 0 ? "+" : ""}${fx(d_)}</span>`; };
+    $("#nrList").innerHTML = `<div class="nr-scroll"><table class="nr-t"><thead><tr><th>Petsa</th><th>News</th><th>Forecast</th><th>Actual</th><th>Prev</th><th>Forecast vs actual</th><th>Gold +5m</th><th>+10m</th><th>+30m</th><th>Range 10m</th><th>NEWS trades</th></tr></thead><tbody>`
+      + rows.map((r) => {
+        const c = r.cmp;
+        const cv = c ? `<span class="${c.verdict === "TUGMA" ? "c-bull" : "c-warn"}">${c.verdict}</span> <span class="muted">${c.surprise > 0 ? "+" : ""}${c.surprise}${c.pct != null ? " (" + c.pct + "%)" : ""}</span>` : '<span class="muted">wala pang actual</span>';
+        const tr = (r.trades || []).map((t) => `<span class="nr-tr ${t.result === "WIN" ? "c-bull" : t.result === "LOSS" ? "c-bear" : ""}">${t.what} ${t.side === 1 ? "BUY" : "SELL"} ${t.result}${t.pnl != null ? " " + money(t.pnl) : ""}</span>`).join(" ") || '<span class="muted">—</span>';
+        return `<tr><td class="mono">${new Date(r.t * 1000).toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+          <td><b>${esc(r.currency)}</b> ${esc(r.title)}</td><td class="mono">${esc(r.forecast || "–")}</td><td class="mono">${esc(r.actual || "–")}</td><td class="mono">${esc(r.previous || "–")}</td>
+          <td>${cv}</td><td class="mono">${mv(r, "5")}</td><td class="mono">${mv(r, "10")}</td><td class="mono">${mv(r, "30")}</td><td class="mono">$${fx(r.range10 || 0)}</td><td>${tr}</td></tr>`;
+      }).join("") + "</tbody></table></div>"
+      + '<p class="muted small">Forecast accuracy = gaano kalapit ang forecast sa lumabas na actual (TUGMA kung ±5%). Kung walang actual ang calendar feed, ang galaw ng gold at ang resulta ng news trades ang batayan.</p>';
   }
   setInterval(tickNews, 1000);
+  $("#tsNews").addEventListener("click", () => document.querySelector('.nav[data-view="news"]').click());
+  document.querySelector('.nav[data-view="news"]').addEventListener("click", () => { window.rgNrAt = Date.now(); setTimeout(loadNewsResults, 50); });
   $("#newsPill").addEventListener("click", () => document.querySelector('.nav[data-view="news"]').click());
 
   function renderNews() {
@@ -2201,6 +2299,8 @@
     ["master_lot", "Master lot", "followers: own fixed lot"], ["place_before_sec", "Place before (sec)", ""],
     ["close_before_news", "Isara ang open trades bago ang news", "SuperChart trades lang (hindi ang ibang EA)", ["true", "false"]],
     ["close_before_sec", "Isara ilang sec bago", ">= place before"],
+    ["follow_trend", "TREND pagkatapos ng news", "kapag na-hit ang news stop sa master: may kasunod na market trade sa parehong direksyon", ["false", "true"]],
+    ["time_exit_min", "Isara ang news trades pagkalipas ng (min)", "news trade + TREND nito · 0 = off"],
     ["nobox_mode", "Kapag walang box", "distance = presyo ± offset · skip = walang trade", ["distance", "skip"]],
     ["nobox_offset", "Walang box: layo ng stop $", "mula sa presyo"], ["nobox_sl", "Walang box: SL $", ""],
     ["cancel_after_min", "Cancel unfilled after (min)", ""], ["buffer_pips", "Entry buffer (pips)", "beyond the box edge"],
@@ -2367,9 +2467,12 @@
     // master + followers: connected dot, account # and balance / equity (always visible above the chart)
     const accts = trading ? [T.master ? Object.assign({}, T.master, { role: "M" }) : null, ...(T.followers || []).map((f) => Object.assign({}, f, { role: "F" }))].filter(Boolean) : [];
     $("#tsAccts").innerHTML = accts.map((a) => {
-      const ok = a.connected && !a.locked && !a.login_error && (a.role === "M" || a.enabled !== false);
-      const why = !a.connected ? (a.error || a.status || "hindi konektado") : a.locked ? "locked: " + a.locked : a.login_error || (a.enabled === false ? "disabled" : "konektado");
-      return `<span class="ts-acct ${ok ? "ok" : "bad"}" title="${esc((a.role === "M" ? "MASTER" : "FOLLOWER") + " " + (a.name || "") + " · " + why)}"><i></i>${a.role} ${a.login ? "#" + esc(a.login) : esc(a.name || "")} <b>${a.balance != null ? money(a.balance) : "--"}</b>${a.equity != null && a.balance != null && Math.abs(a.equity - a.balance) >= 0.01 ? ` <span class="${a.equity >= a.balance ? "c-bull" : "c-bear"}">eq ${money(a.equity)}</span>` : ""}</span>`;
+      const noAlgo = !T.paper && a.trade_allowed === false;
+      const ok = a.connected && !a.locked && !a.paused && !noAlgo && !a.login_error && (a.role === "M" || (a.enabled !== false && a.lot));
+      const why = !a.connected ? (a.error || a.status || "hindi konektado") : a.locked ? "LOCKED: " + a.locked : a.paused ? "PAUSED: " + a.paused
+        : noAlgo ? "Algo Trading OFF sa MT5" : a.login_error || (a.enabled === false ? "copy trades OFF" : a.role === "F" && !a.lot ? "walang lot" : "konektado, kokopya");
+      const tag = ok ? "" : ` <span class="c-bear">${esc(!a.connected ? "OFFLINE" : a.locked ? "LOCKED" : a.paused ? "PAUSED" : noAlgo ? "ALGO OFF" : a.enabled === false ? "OFF" : "!")}</span>`;
+      return `<span class="ts-acct ${ok ? "ok" : "bad"}" data-acct="${esc(a.id || "")}" data-paused="${a.paused ? 1 : ""}" data-locked="${a.locked ? 1 : ""}" title="${esc((a.role === "M" ? "MASTER" : "FOLLOWER") + " " + (a.name || "") + " · " + why)}"><i></i>${a.role} ${a.login ? "#" + esc(a.login) : esc(a.name || "")}${tag} <b>${a.balance != null ? money(a.balance) : "--"}</b>${a.equity != null && a.balance != null && Math.abs(a.equity - a.balance) >= 0.01 ? ` <span class="${a.equity >= a.balance ? "c-bull" : "c-bear"}">eq ${money(a.equity)}</span>` : ""}</span>`;
     }).join("");
     const D = window.rgStratD;
     const prof = D && D.settings ? D.settings.profile : null;
@@ -2379,8 +2482,8 @@
     $("#tsStrat").querySelectorAll("[data-stauto]").forEach((b) => {
       const isOn = !!(D && D.settings && D.settings[b.dataset.stauto].auto);
       b.classList.toggle("on", isOn);
-      b.innerHTML = `${isOn ? "●" : "○"} ${b.dataset.lbl}`;
-      b.title = isOn ? "Naka-AUTO: papasukan ng AUTO kapag lahat green · i-click para gawing MANUAL" : "MANUAL: i-click para i-AUTO";
+      if (window.rgStratPaint) window.rgStratPaint(b, isOn);
+      else b.innerHTML = `${isOn ? "●" : "○"} ${b.dataset.lbl}`;
     });
     const st = AT && AT.settings;
     const extra = st && st.strategies_only === false && (st.sources || []).length ? ` <span class="muted" title="iba pang AUTO source (Trading → AUTO TRADE settings)">+ ${esc(st.sources.join(" + "))}</span>` : "";
@@ -2425,6 +2528,17 @@
       if (T && T.halted) ensureArmed();             // HALTED: asks before resuming
       return;
     }
+    const ac = e.target.closest(".ts-acct");
+    if (ac && (ac.dataset.paused || ac.dataset.locked)) {
+      const paused = !!ac.dataset.paused;
+      showModal(paused ? "I-resume ang follower?" : "I-unlock ang account?", `<p>${esc(ac.title)}</p><p>Pagkatapos nito, kokopyahin ulit nito ang mga bagong trade.</p>`,
+        paused ? "Resume" : "Unlock", async () => {
+          await api(paused ? "/api/reconciliation/resume" : "/api/trade/unlock", { id: ac.dataset.acct }).catch(() => null);
+          hideModal(); pollTrading();
+        });
+      return;
+    }
+    if (ac) { showModal("Account", `<p>${esc(ac.title)}</p>`, "", null); return; }
     if (e.target.closest("#tsManual")) {
       manPop.hidden = !manPop.hidden;
       $("#tsManual").classList.toggle("open", !manPop.hidden);
@@ -2459,7 +2573,7 @@
     if (!w || !s) return;
     const old = s.build !== BUILD;
     w.hidden = !old;
-    if (old) w.innerHTML = `⚠ <b>Luma pa ang tumatakbong terminal</b> (server ${esc(s.build || "bago ang 2026-09-29")}, page ${BUILD}). I-close ang terminal at buksan ulit para gumana ang mga bagong feature (router, reversal, news trade). Laging OFF ang AUTO pagkatapos mag-restart.`;
+    if (old) w.innerHTML = `⚠ <b>Luma pa ang tumatakbong terminal</b> (server ${esc(s.build || "bago ang 2026-09-29")}, page ${BUILD}). I-close ang terminal at buksan ulit para gumana ang mga bagong feature (router, reversal, news trade). Kusang mag-o-ON ang AUTO pagbukas kung naka-check ang "AUTO ON pagbukas ng app".`;
   }
 
   // ================================================================ scroll buttons
@@ -2719,7 +2833,7 @@
     if (!AT.enabled) lines.push('<span class="muted">OFF · walang automatic na order. Signals lang ang nasa chart.</span>');
     else if (!AT.armed) lines.push('<span class="c-warn">DISARMED: hindi makakapag-trade</span>');
     else lines.push(`<span class="c-bull">ON · ${T && T.paper ? "paper" : "<b>LIVE</b>"} · kukunin ang bagong signal sa pagsara ng bawat ${st.tf} bar</span>`);
-    lines.push(`Today: <b>${AT.today}/${st.max_per_day}</b> · session: ${AT.session_ok ? `<span class="c-bull">${esc(AT.session || "open")}</span>` : `<span class="c-warn">${esc(AT.session)}</span>`}`);
+    lines.push(`Today: <b>${AT.today}/${st.max_per_day || "∞"}</b> · session: ${AT.session_ok ? `<span class="c-bull">${esc(AT.session || "open")}</span>` : `<span class="c-warn">${esc(AT.session)}</span>`}`);
     lines.push(`<span class="muted">filters: ${st.direction} · max ⚠ ${st.max_cautions < 0 ? "any" : st.max_cautions} · ${st.min_score ? "score ≥ " + st.min_score + "%" : "passing score"} · ${st.sessions.join("/") || "all sessions"} · ${st.news_block ? "no news window" : "news allowed"} · max open ${st.max_open}</span>`);
     $("#autoStatus").innerHTML = lines.map((l) => `<div>${l}</div>`).join("");
     $("#autoLog").innerHTML = (AT.log || []).slice(0, 6).map((l) => {
@@ -2735,13 +2849,25 @@
     const num = (k, step = "any") => `<input type="number" step="${step}" data-a="${k}" value="${st[k]}">`;
     const ck = (grp, v, on) => `<label class="ck"><input type="checkbox" data-g="${grp}" value="${v}" ${on ? "checked" : ""}> ${v}</label>`;
     $("#autoSet").innerHTML = `
+      <label class="ck wide2"><input type="checkbox" data-a="auto_on_start" ${st.auto_on_start ? "checked" : ""}> <b>AUTO ON pagbukas ng app</b>: kusang ON ang trading + AUTO tuwing bubuksan (LIVE = totoong order)</label>
+      <label class="ck wide2"><input type="checkbox" data-a="news_on_start" ${st.news_on_start !== false ? "checked" : ""}> <b>NEWS TRADE ON pagbukas</b> (kasama ng AUTO ON pagbukas)</label>
       <label class="ck wide2"><input type="checkbox" data-a="strategies_only" ${st.strategies_only !== false ? "checked" : ""}> <b>STRATEGIES LANG</b>: ang mga strategy na naka-AUTO lang ang papasukan (TREND / PULLBACK / CONSOLIDATION). OFF = pati ang mga source sa ibaba (analyser, breakout…)</label>
+      <div class="pf wide2 at-master"><span>MASTER (gaya ng MT5 Master EA v1.90)</span><div>
+        <label class="ck"><input type="checkbox" data-a="master_mode" ${st.master_mode !== false ? "checked" : ""}> <b>Bawat strategy may sariling trade</b>: puwedeng sabay ang TREND, PULLBACK at CONSO (kahit magkasalungat); isang trade lang bawat strategy</label>
+        <label class="ck"><input type="checkbox" data-a="reversal" ${st.reversal !== false ? "checked" : ""}> <b>Reversal close</b>: bagong TREND signal = isara ang mga lumang trade na kontra dito (at ang CONSO stop sa kabilang side) ng:</label>
+        <div class="rt-row">${["trend", "pullback", "conso"].map((x) => ck("rev_close", x, (st.rev_close || []).includes(x))).join("")}</div>
+        <label class="pf bt-inl"><span>TREND early exit</span>${sel("trend_early_exit", ["off", "m15_bos", "m15_2bos"])}</label>
+        <label class="pf bt-inl"><span>Re-entry pagkatapos manalo (H4 bars, 0 = off)</span>${num("trend_reentry_win", "1")}</label>
+        <label class="pf bt-inl"><span>Secure: isara ang % sa +R (0 = off)</span>${num("trend_secure_r", "0.1")}</label>
+        <label class="pf bt-inl"><span>Secure %</span>${num("trend_secure_pct", "5")}</label>
+        <label class="ck"><input type="checkbox" data-a="conso_protect" ${st.conso_protect ? "checked" : ""}> CONSO: may break-even / lock (EA: off)</label>
+        <div class="muted small">Early exit <b>m15_2bos</b>: isasara ang TREND trade bago mag-TP kapag ang ika-2 BOS (huling 32 bars) ay kontra dito. Secure: hindi mahahati ang 0.01 lot, kaya buo itong mananatili. Ang daily loss / profit target ay nasa <b>Accounts</b> (master: $20 / $60).</div></div></div>
       <label class="pf"><span>Master lot</span>${num("lot", "0.01")}</label>
       <label class="pf"><span>Timeframe</span>${sel("tf", ["M1", "M5", "M15", "M30", "H1"])}</label>
       <label class="pf"><span>Direction</span>${sel("direction", ["both", "buy", "sell"])}</label>
       <label class="pf"><span>Max ⚠ cautions (-1 = any)</span>${num("max_cautions", "1")}</label>
       <label class="pf"><span>Min score % (0 = passing)</span>${num("min_score", "1")}</label>
-      <label class="pf"><span>Max auto trades / day</span>${num("max_per_day", "1")}</label>
+      <label class="pf"><span>Max auto trades / day (0 = walang limit)</span>${num("max_per_day", "1")}</label>
       <label class="pf"><span>Max open trades</span>${num("max_open", "1")}</label>
       <label class="pf"><span>Re-entry: maghintay (min)</span>${num("reentry_minutes", "5")}</label>
       <label class="pf"><span>Max spread $ (0 = any)</span>${num("max_spread", "0.05")}</label>
@@ -2761,7 +2887,7 @@
         <label class="pf bt-inl"><span>Min reversal score</span>${num("reversal_min_score", "5")}</label>
         <label class="pf bt-inl"><span>Kumpirmasyon</span><select data-a="reversal_confirm"><option value="bias" ${st.reversal_confirm !== "score" ? "selected" : ""}>HTF bias lang (dulo ng pullback)</option><option value="score" ${st.reversal_confirm === "score" ? "selected" : ""}>HTF bias + pasadong score</option></select></label>
         <div class="muted small">Papasok lang ang arrow kapag <b>kasabay ng HTF bias</b>: hindi tini-trade ang kontra-trend na arrow. Dadaan pa rin sa lahat ng gate (session, news, risk, max trades).</div></div></div>
-      <div class="pf wide2"><span>Sessions (UTC)</span><div>${["Asia", "London", "New York"].map((x) => ck("sessions", x, st.sessions.includes(x))).join("")}</div></div>
+      <div class="pf wide2"><span>Sessions (UTC)</span><div>${["Asia", "Frankfurt", "London", "New York"].map((x) => ck("sessions", x, st.sessions.includes(x))).join("")}</div></div>
       <label class="ck wide2"><input type="checkbox" data-a="news_block" ${st.news_block ? "checked" : ""}> Walang entry sa news warning window</label>
       <div class="pf wide2"><span>Market regime (walang check = kahit ano)</span><div>${Object.keys(REG_COL).map((x) => ck("regimes", x, (st.regimes || []).includes(x))).join("")}</div></div>
       <label class="ck wide2"><input type="checkbox" data-a="no_opposite" ${st.no_opposite !== false ? "checked" : ""}> <b>Bawal ang kontrang trade</b>: kapag may bukas na BUY, walang SELL (at kabaligtaran). Kasama ang manual na entry.</label>
@@ -2787,7 +2913,7 @@
     if (e.target.id !== "atSave") return;
     const body = {};
     document.querySelectorAll("#autoSet [data-a]").forEach((el) => { body[el.dataset.a] = el.type === "checkbox" ? el.checked : el.value; });
-    for (const g of ["sources", "sessions", "regimes", "router_trend_labels", "router_range_labels"]) body[g] = [...document.querySelectorAll(`#autoSet [data-g="${g}"]`)].filter((x) => x.checked).map((x) => x.value);
+    for (const g of ["sources", "sessions", "regimes", "router_trend_labels", "router_range_labels", "rev_close"]) body[g] = [...document.querySelectorAll(`#autoSet [data-g="${g}"]`)].filter((x) => x.checked).map((x) => x.value);
     const r = await api("/api/auto/settings", body).catch(() => ({ ok: false }));
     atDirty = false;
     $("#atSaved").textContent = r.ok ? "saved ✓" : "save failed";
@@ -2804,20 +2930,32 @@
       `<p>Kapag naka-ON at naka-ARM, <b>kusang magpapadala ng order</b>${T.paper ? " (paper)" : ` — <b class="c-bear">LIVE, totoong pera</b>`} sa master at sa lahat ng naka-enable na follower,
         ${st.strategies_only !== false ? `kapag <b>lahat green</b> ang strategy na naka-AUTO (${esc(((window.rgStratD && window.rgStratD.settings) ? ["trend", "pullback", "conso"].filter((n) => window.rgStratD.settings[n].auto).map((n) => n.toUpperCase()).join(", ") : "") || "wala pa: i-click ang ○ ng strategy")}).` : `tuwing may bagong <b>${esc(st.sources.join(" / "))}</b> signal sa pagsara ng ${st.tf} bar.`}</p>
        <ul class="small"><li>Lot ng master: <b>${st.lot}</b> (followers: sariling fixed lot)</li>
-        <li>Max <b>${st.max_per_day}</b> auto trade bawat araw · max <b>${st.max_open}</b> bukas${st.max_open > 1 ? ` · re-entry pagkatapos ng <b>${st.reentry_minutes ?? 30} min</b> kung nasa trend pa at pasado pa` : ""}${st.no_opposite !== false ? " · <b>walang kontrang trade</b>" : ""}</li>
+        <li>Max <b>${st.max_per_day || "walang limit"}</b> auto trade bawat araw · max <b>${st.max_open}</b> bukas${st.max_open > 1 ? ` · re-entry pagkatapos ng <b>${st.reentry_minutes ?? 30} min</b> kung nasa trend pa at pasado pa` : ""}${st.no_opposite !== false ? " · <b>walang kontrang trade</b>" : ""}</li>
+        ${st.master_mode !== false ? `<li><b>MASTER</b>: bawat strategy may sariling trade${st.reversal !== false ? " · reversal close" : ""}${st.trend_early_exit && st.trend_early_exit !== "off" ? " · early exit " + esc(st.trend_early_exit) : ""}${+st.trend_secure_r ? ` · secure ${st.trend_secure_pct}% sa ${st.trend_secure_r}R` : ""}</li>` : ""}
         <li>Sessions: ${esc(st.sessions.join(", ") || "lahat")} · ${st.news_block ? "walang entry sa news window" : "<b class='c-warn'>pwede kahit may news</b>"}</li>
         <li>Max ⚠ caution: ${st.max_cautions < 0 ? "<b class='c-warn'>kahit ilan</b>" : st.max_cautions} · direksyon: ${st.direction}</li>
         ${st.router ? `<li><b>Regime router ON</b>: ${esc((st.router_trend_labels || []).join("/"))} → trend signal 1:${st.router_trend_rr} · ${esc((st.router_range_labels || []).join("/"))} → reversal arrow 1:${st.router_range_rr} · ibang regime: walang trade</li>` : ""}
         ${st.sources.includes("reversal") ? `<li>Reversal arrows: ${st.reversal_confirmed_only !== false ? "R✓ lang" : "<b class='c-warn'>pati R? (hindi pa kumpirmado)</b>"} · min score ${st.reversal_min_score ?? 60} · ${st.reversal_confirm === "score" ? "bias + pasadong score" : "HTF bias lang"}</li>` : ""}</ul>
        ${missing.length ? `<p class="c-warn">⚠ Naka-OFF sa LAYERS: ${esc(missing.join(", "))}. I-ON muna ang plugin para may signal.</p>` : ""}
-       <p class="muted">Hindi nito kukunin ang mga lumang arrow sa chart, pati ang mga bagong nabuo pa lang. Laging OFF pagbukas ng app. Ang pag-ON nito ay nag-e-enable din ng trading (wala nang hiwalay na ARM).</p>`,
+       <label class="ck"><input type="checkbox" id="autoAlways" ${st.auto_on_start ? "checked" : ""}> <b>Laging AUTO pagbukas ng app</b> (kusang mag-o-ON ang trading + AUTO tuwing bubuksan ang SuperChart)</label>
+       <p class="muted">Hindi nito kukunin ang mga lumang arrow sa chart. Ang pag-ON nito ay nag-e-enable din ng trading (wala nang hiwalay na ARM).</p>`,
       "Turn AUTO ON", async () => {
+        const always = !!($("#autoAlways") && $("#autoAlways").checked);
         hideModal();
-        if (!(await ensureArmed())) return;
-        const r = await api("/api/auto/enable", { enabled: true }).catch((x) => ({ ok: false, error: String(x) }));
-        if (!r.ok) showModal("Auto trade", `<p class="c-bear">${esc(r.error || "failed")}</p>`, "", null);
-        else hideModal();
-        pollAT();
+        if (T && T.halted && !(await ensureArmed())) return;          // HALTED: asks before resuming
+        const r = await api("/api/auto/start", {}).catch((x) => ({ ok: false, error: "walang sagot ang server: " + String(x) }));
+        if (always !== !!st.auto_on_start) await api("/api/auto/settings", { auto_on_start: always }).catch(() => null);
+        await pollTrading(); await pollAT();
+        if (!r.ok) return showModal("Hindi na-ON ang AUTO", `<p class="c-bear">${esc(r.error || "failed")}</p>`, "", null);
+        if (r.warning) showModal("AUTO ON, pero…", `<p class="c-warn">Naka-ON ang AUTO, pero hindi pa makakapag-order: <b>${esc(r.warning)}</b></p>`, "", null);
+        // double check a few seconds later: if it went OFF again, say why (the last AUTO log line)
+        setTimeout(async () => {
+          await pollAT();
+          if (AT && !AT.enabled) {
+            const last = (AT.log || [])[0];
+            showModal("Nag-OFF ulit ang AUTO", `<p class="c-bear">${esc(last ? last.text : "walang dahilan sa log")}</p>`, "", null);
+          }
+        }, 4000);
       }, !T.paper);
   });
 
@@ -4057,9 +4195,9 @@
   const fx = (v) => (v == null || isNaN(v) ? "--" : Number(v).toFixed(2));
   let ST = null, dirty = false, timer = null;
   const PARAMS = {
-    trend: [["bos_ltf", "Entry TF (BOS)", ["M5", "M15", "H1"]], ["bos_htf", "Trend TF (BOS)", ["M15", "H1", "H4"]], ["bos_m15_min", "Ilang BOS sa entry TF", 1], ["rsi_hi", "KONTRA: overbought kapag RSI ≥ (BUY)", 1], ["rsi_lo", "KONTRA: oversold kapag RSI ≤ (SELL)", 1], ["ob_tf", "KONTRA: order block TF", ["M5", "M15", "H1"]], ["ob_block_atr", "KONTRA: OB nakaharang kapag ≤ ×ATR ang layo", 0.1], ["bos_window", "Entry BOS: sa huling N kandila", 1], ["h4_window", "Trend BOS: sa huling N kandila", 1], ["rr", "RR (1:x)", 0.25], ["sl_atr", "SL × ATR", 0.1], ["adx_min", "ADX min", 1], ["cooldown", "Pahinga (bars)", 1]],
-    pullback: [["rr", "RR (1:x)", 0.25], ["sl_atr", "SL × ATR (fallback)", 0.1], ["os", "RSI oversold (uptrend)", 1], ["ob", "RSI overbought (downtrend)", 1], ["mfi_os", "MFI oversold ≤", 1], ["mfi_ob", "MFI overbought ≥", 1], ["doji_body", "Doji: body ≤ ×range", 0.05], ["ob_tf", "Order block TF (hindi dapat ma-break)", ["M5", "M15", "H1"]], ["ob_near", "Order block: lapit (× ATR)", 0.05], ["vol_pct", "VOLATILE kapag ATR pct ≥", 1], ["cooldown", "Pahinga (bars)", 1]],
-    conso: [["adx_max", "ADX max (mababa)", 1], ["vol_pct", "Volume ≤ percentile", 5], ["quiet_bars", "Tahimik nang min. N kandila", 1], ["levels", "Grid levels bawat side", 1], ["step", "Grid step $", 0.25], ["rr", "RR (1:x)", 0.25], ["buffer", "Buffer sa labas ng range $", 0.1], ["max_sl", "Max SL $", 0.5], ["range_bars", "Range: huling N bars (kapag walang box)", 1], ["max_range", "Max range $", 0.5], ["expiry_bars", "Kanselahin pagkatapos ng (bars)", 1]],
+    trend: [["bos_ltf", "Entry TF (BOS)", ["M5", "M15", "H1"]], ["bos_htf", "Trend TF (BOS)", ["M15", "H1", "H4"]], ["bos_m15_min", "Ilang BOS sa entry TF", 1], ["of_bars", "ORDER FLOW: ilang kandila", 1], ["of_min", "ORDER FLOW: min %", 1], ["rsi_hi", "KONTRA: overbought kapag RSI ≥ (BUY)", 1], ["rsi_lo", "KONTRA: oversold kapag RSI ≤ (SELL)", 1], ["ob_tf", "KONTRA: order block TF", ["M5", "M15", "H1"]], ["ob_block_atr", "KONTRA: OB nakaharang kapag ≤ ×ATR ang layo", 0.1], ["bos_window", "Entry BOS: sa huling N kandila", 1], ["h4_window", "Trend BOS: sa huling N kandila", 1], ["rr", "RR (1:x)", 0.25], ["sl_mode", "SL: swing = huling swing / atr = × ATR", ["swing", "atr"]], ["swing_buf", "Swing SL: lampas ng × ATR", 0.05], ["swing_max", "Swing SL: max × ATR", 0.5], ["sl_atr", "SL × ATR (atr mode / walang swing)", 0.1], ["adx_min", "ADX min", 1], ["cooldown", "Pahinga (bars)", 1], ["m5_window", "M5 STRUCTURE: BOS sa huling N M5 bars", 1], ["cvd_mode", "CVD: slope8 = tumataas sa huling N / turn2 = huling 2", ["slope8", "turn2"]], ["cvd_bars", "CVD: ilang kandila (slope)", 1]],
+    pullback: [["rr", "RR (1:x)", 0.25], ["sl_atr", "SL × ATR (fallback)", 0.1], ["os", "RSI oversold (uptrend)", 1], ["ob", "RSI overbought (downtrend)", 1], ["mfi_os", "MFI oversold ≤", 1], ["mfi_ob", "MFI overbought ≥", 1], ["doji_body", "Doji: body ≤ ×range", 0.05], ["ob_tf", "Order block TF (hindi dapat ma-break)", ["M5", "M15", "H1"]], ["of_min", "ORDER FLOW: min % (huling 2 kandila)", 1], ["ob_near", "Order block: lapit (× ATR)", 0.05], ["vol_pct", "VOLATILE kapag ATR pct ≥", 1], ["cooldown", "Pahinga (bars)", 1]],
+    conso: [["adx_max", "ADX max (mababa)", 1], ["of_bars", "ORDER FLOW: ilang kandila", 1], ["of_min", "ORDER FLOW balanse: |delta| < %", 1], ["vol_pct", "Volume ≤ percentile", 5], ["quiet_bars", "Tahimik nang min. N kandila", 1], ["levels", "Grid levels bawat side", 1], ["step", "Grid step $", 0.25], ["rr", "RR (1:x)", 0.25], ["buffer", "Buffer sa labas ng range $", 0.1], ["max_sl", "Max SL $", 0.5], ["range_bars", "Range: huling N bars (kapag walang box)", 1], ["max_range", "Max range $", 0.5], ["expiry_bars", "Kanselahin pagkatapos ng (bars)", 1]],
   };
   window.rgStratParams = PARAMS;
   const DESC = { trend: "BOS sa entry TF (hal. 2 sa M15) + 1 BOS sa trend TF (hal. H4) sa parehong direksyon → market entry SA DIREKSYON ng trend", pullback: "Uptrend + oversold + MFI + doji + order block → BUY (salamin para sa SELL)", conso: "Volume mahina (1) + ADX < 20 (2) + box (3) → BUY STOP sa itaas / SELL STOP sa ibaba ng box; na-hit ang isa = cancel ang kabila (OCO)" };
@@ -4080,7 +4218,7 @@
   function liveHtml(n, e, cfg) {
     if (!e) return "";
     const ok = e.ok;
-    const SHORT = { bos_m15: `${cfg.bos_ltf || "M15"} BOS ×${cfg.bos_m15_min || 2}`, bos_h4: `${cfg.bos_htf || "H4"} BOS`, rsi: "RSI oversold/overbought", mfi: "MFI", doji: "Doji", ob: "Order block", vol_low: "Mahinang volume", adx_low: "ADX < " + (cfg.adx_max || 20), box: "Box", squeeze: "BB squeeze", atr_low: "ATR tahimik", stoch: "Stoch", cci: "CCI", wpr: "W%R", near_ema: "Malapit sa EMA", turn: "Bumabalik", volatile: "hindi VOLATILE", range: "siksik na range", trend: "trend" };
+    const SHORT = { bos_m15: `${cfg.bos_ltf || "M15"} BOS ×${cfg.bos_m15_min || 2}`, bos_h4: `${cfg.bos_htf || "H4"} BOS`, rsi: "RSI oversold/overbought", mfi: "MFI", doji: "Doji", ob: "Order block", ob_spike: "OB o spike", spike: "Spike", vol_low: "Mahinang volume", adx_low: "ADX < " + (cfg.adx_max || 20), box: "Box", squeeze: "BB squeeze", atr_low: "ATR tahimik", stoch: "Stoch", cci: "CCI", wpr: "W%R", near_ema: "Malapit sa EMA", turn: "Bumabalik", volatile: "hindi VOLATILE", range: "siksik na range", trend: "trend", of_buyers: "Order flow", of_turn: "Order flow", of_balanced: "Order flow balanse" };
     const lab = (k) => SHORT[k] || (e.labels && e.labels[k]) || k;
     const miss = (e.missing || []).map(lab);
     const on = (e.on || []).length, have = (e.on || []).filter((k) => e.met && e.met[k]).length;
@@ -4232,11 +4370,64 @@
     if (nr.dist != null) t += ` · <b>${nr.dist <= 0 ? "LAGPAS NA" : "$" + fx(nr.dist) + " ang layo"}</b>`;
     return t ? `<div class="ss-near">${ok ? "▶ " : ""}${t}</div>` : "";
   }
+  // ORDER FLOW for one strategy: what it must show here, the value now, ✓ / ✗
+  function ofLine(n, e) {
+    const o = e && e.of;
+    if (!o) return "";
+    const want = n === "conso" ? `balanse <${o.need}%` : o.side === 1 ? `buyers ≥${o.need}%` : o.side === -1 ? `sellers ≥${o.need}%` : `≥${o.need}%`;
+    if (!o.on) return `<div class="ss-ofl off">ORDER FLOW: hindi ginagamit <span class="muted">(＋ sa ⚙)</span></div>`;
+    if (o.nodata) return `<div class="ss-ofl">ORDER FLOW: <span class="muted">walang tick data pa (hindi binibilang)</span></div>`;
+    const who = o.pct >= 0 ? "buyers" : "sellers";
+    return `<div class="ss-ofl ${o.ok ? "ok" : "bad"}" title="${esc(o.role)} · huling ${o.bars} kandila"><b>${o.ok ? "✓" : "✗"} OF</b> ${who} <b class="mono">${o.pct >= 0 ? "+" : ""}${o.pct.toFixed(0)}%</b> <span class="muted">· kailangan ${want}</span></div>`;
+  }
   function row(n, title, state, body, pct, ok, bdg) {
     const cls = ok ? "ready" : pct >= 60 ? "near" : "";
     const tag = ok ? '<span class="c-bull">READY</span>' : pct >= 60 ? '<span class="c-warn">MALAPIT</span>' : "";
     return `<div class="ss-row ${cls}"><div class="ss-h"><b>${title}</b>${bdg ?? badge(n)}${n ? `<button class="ss-gear" data-sedit="${n}" title="Strategy panel: i-edit ang values / magdagdag ng indicator">⚙</button>` : ""}<span class="ss-state">${tag} ${state}</span></div>
       <div class="ss-bar" title="${pct}% ng kailangan"><i style="width:${Math.max(3, pct)}%"></i></div>${body}</div>`;
+  }
+  const ST_STATUS = {};
+  function noteStatus(n, ok, pct, sd, text, e) { ST_STATUS[n] = { ok: !!ok, pct: pct || 0, side: sd || 0, text: text || "", why: ok ? readyWhy(n, e) : null }; }
+  // v2.8.5: why a READY strategy does / does not trade, as plain text for the strip above the chart
+  function readyWhy(n, e) {
+    if (!e || !D || !D.auto || !D.auto.trading) return { lvl: "bad", text: "READ-ONLY: walang trading" };
+    const a = D.auto;
+    if (!a.strategies[n]) return { lvl: "bad", text: "naka-MANUAL (○): hindi ite-trade ng AUTO · i-click para i-AUTO" };
+    if (!a.enabled) return { lvl: "bad", text: "OFF ang AUTO TRADE (⚡ AUTO sa itaas)" };
+    if (!a.armed) return { lvl: "bad", text: "naka-OFF / HALTED ang trading (ARM)" };
+    const la = e.last_auto;
+    if (la && la.decision === "skip" && /naka-place na ang grid/.test(la.text))
+      return { lvl: "ok", text: (la.text.match(/\]\s*(.*)$/) || [])[1] || la.text };
+    if (la && la.decision === "skip") return { lvl: "bad", text: "hindi pumasok: " + ((la.text.match(/\[(BLOCKED_[A-Z_]+)\]\s*(.*)$/) || [])[2] || la.text) };
+    if (la && la.decision === "error") return { lvl: "bad", text: la.text };
+    if (la && la.decision === "trade") return { lvl: "ok", text: "PUMASOK na: " + la.text };
+    return { lvl: "ok", text: "papasok ang AUTO (sa loob ng ~15 s, kung pasado sa risk / session / news)" };
+  }
+  // v2.8.3: the AUTO strategy buttons above the chart light up (green = READY, yellow = MALAPIT) with side + %
+  window.rgStratPaint = function (b, isOn) {
+    const n = b.dataset.stauto, st = ST_STATUS[n];
+    const arrow = st && st.side ? (st.side === 1 ? '<i class="c-bull">▲</i>' : '<i class="c-bear">▼</i>') : "";
+    const pct = st && !st.ok && st.pct ? `<small>${Math.round(st.pct)}%</small>` : st && st.ok ? "<small>READY</small>" : "";
+    b.innerHTML = `${isOn ? "●" : "○"} ${b.dataset.lbl} ${arrow}${pct}`;
+    const blocked = !!(st && st.ok && st.why && st.why.lvl === "bad");
+    b.classList.toggle("st-ready", !!(st && st.ok) && !blocked);
+    b.classList.toggle("st-blocked", blocked);
+    if (blocked) b.innerHTML = `${isOn ? "●" : "○"} ${b.dataset.lbl} ${arrow}<small>⛔ READY</small>`;
+    b.classList.toggle("st-near", !!(st && !st.ok && st.pct >= 60));
+    b.title = `${b.dataset.lbl}: ${st ? (st.ok ? "READY" : st.pct >= 60 ? "MALAPIT" : "naghihintay") + (st.text ? " · " + st.text : "") + " · " + Math.round(st.pct) + "%" : "--"}\n`
+      + (st && st.why ? st.why.text + "\n" : "")
+      + (isOn ? "Naka-AUTO · i-click para gawing MANUAL" : "MANUAL · i-click para i-AUTO");
+  };
+  function paintStrip() {
+    document.querySelectorAll("#tsStrat [data-stauto]").forEach((b) => window.rgStratPaint(b, b.classList.contains("on")));
+    const w = document.getElementById("tsWhy");
+    if (w) {
+      const T = { trend: "TREND", pullback: "PULLBACK", conso: "CONSO" };
+      const rows = Object.keys(T).filter((n) => ST_STATUS[n] && ST_STATUS[n].ok && ST_STATUS[n].why)
+        .map((n) => `<span class="${ST_STATUS[n].why.lvl === "bad" ? "c-bear" : "c-bull"}">${ST_STATUS[n].why.lvl === "bad" ? "⛔" : "▶"} <b>${T[n]}</b> ${esc(ST_STATUS[n].why.text)}</span>`);
+      w.innerHTML = rows.join(" · ");
+      w.hidden = !rows.length;
+    }
   }
   function render() {
     const box = $("#ssRows");
@@ -4251,18 +4442,24 @@
     if (pf) $("#ssAuto").innerHTML += chip(pf === "custom" ? "CUSTOM" : ((D.profiles || {})[pf] || {}).title || pf, "info");
     if (D.error) { box.innerHTML = `<div class="muted small">${esc(D.error)}</div>`; return; }
     const S = D.strategies || {}, out = [];
+    const of = D.orderflow;
+    if (of) {
+      const p = of.pressure, who = p >= 15 ? "BUYERS" : p <= -15 ? "SELLERS" : "BALANSE";
+      out.push(`<div class="ss-of ${p >= 15 ? "buy" : p <= -15 ? "sell" : ""}" title="Order flow (MT5 ticks): delta % ng volume sa huling 3 kandila"><b>ORDER FLOW</b> <span>${who} ${p >= 0 ? "+" : ""}${p.toFixed(0)}%</span><i style="--w:${Math.min(50, Math.abs(p) / 2)}%;--l:${p >= 0 ? 50 : 50 - Math.min(50, Math.abs(p) / 2)}%"></i></div>`);
+    }
     const c = S.conso;
     if (c) {
       const m = c.met || {}, nr = c.near || {};
       const ccfg = (D.settings && D.settings.conso) || {}, con = ccfg.conditions || {};
-      const ckeys = Object.keys(con).filter((k) => con[k]);
+      const ckeys = Object.keys(con).filter((k) => con[k] && k !== "of_balanced");
       const cnt = ckeys.filter((k) => m[k]).length;
-      const cname = { adx_low: `ADX<${ccfg.adx_max || 20}${c.adx != null ? " (" + c.adx + ")" : ""}`, vol_low: "Volume", box: "Box", squeeze: "Squeeze", atr_low: "ATR", rsi_mid: "RSI 40–60", inside_bb: "Loob ng BB" };
+      const cname = { adx_low: `ADX<${ccfg.adx_max || 20}${c.adx != null ? " (" + c.adx + ")" : ""}`, vol_low: "Volume", box: "Box", squeeze: "Squeeze", atr_low: "ATR", rsi_mid: "RSI 40–60", inside_bb: "Loob ng BB", of_balanced: "OF balanse" };
       let b = `<div class="ss-line">${dots(ckeys.map((k) => [m[k], cname[k] || k]))}${c.range_src === "box" ? '<span class="muted small">· may box</span>' : ""}</div>`;
       b += nearHtml(nr, c.ok);
-      b += readyNote("conso", c);
+      b += ofLine("conso", c) + readyNote("conso", c);
       if (c.ok) b += `<div class="ss-line small">BUY STOP <b class="c-bull">${fx(c.buy_stop)}</b> · SELL STOP <b class="c-bear">${fx(c.sell_stop)}</b> · OCO</div>`;
       out.push(row("conso", "CONSOLIDATION", `<b>${cnt}/${ckeys.length}</b>`, b, nr.progress ?? Math.round(cnt / Math.max(1, ckeys.length) * 100), c.ok));
+      noteStatus("conso", c.ok, nr.progress ?? Math.round(cnt / Math.max(1, ckeys.length) * 100), 0, `${cnt}/${ckeys.length} kondisyon`, c);
     }
     const t = S.trend;
     if (t) {
@@ -4272,25 +4469,27 @@
       const ltf = t.ltf || (D.settings && D.settings.trend && D.settings.trend.bos_ltf) || "M15", htf = t.htf || (D.settings && D.settings.trend && D.settings.trend.bos_htf) || "H4";
       const tcon = (D.settings.trend || {}).conditions || {};
       let b = `<div class="ss-line">${dots([...(tcon.bos_h4 ? [[h4 !== 0, `${htf} BOS ${h4 === 1 ? "↑" : h4 === -1 ? "↓" : "–"}`]] : []), ...(tcon.bos_m15 ? [[got >= need && t.m15_last === h4 && h4 !== 0, `${ltf} BOS ${Math.min(got, need)}/${need}${h4 && t.m15_last && t.m15_last !== h4 ? (t.m15_last === 1 ? " (huli ↑)" : " (huli ↓)") : ""}`]] : []),
-        ...Object.entries((D.settings.trend || {}).conditions || {}).filter(([k, v]) => v && k !== "bos_m15" && k !== "bos_h4")
-          .map(([k]) => [(t.met || {})[k], { ema_align: "EMA20/50", price_ema50: "EMA50", adx: "ADX", di: "DI", macd: "MACD", supertrend: "Supertrend", htf: "HTF bias", bos: "BOS", rsi_side: "RSI 50", ema200: "EMA200", not_extreme: t.side === -1 || (t.h4_bos === -1) ? "hindi oversold" : "hindi overbought", no_ob_block: "walang OB sa daan" }[k] || k])])}</div>`;
+        ...Object.entries((D.settings.trend || {}).conditions || {}).filter(([k, v]) => v && k !== "bos_m15" && k !== "bos_h4" && k !== "of_buyers")
+          .map(([k]) => [(t.met || {})[k], { ema_align: "EMA20/50", price_ema50: "EMA50", adx: "ADX", di: "DI", macd: "MACD", supertrend: "Supertrend", htf: "HTF bias", bos: "BOS", rsi_side: "RSI 50", ema200: "EMA200", of_buyers: (t.side || t.h4_bos) === -1 ? "OF sellers" : "OF buyers", not_extreme: t.side === -1 || (t.h4_bos === -1) ? "hindi oversold" : "hindi overbought", no_ob_block: "walang OB sa daan" }[k] || k])])}</div>`;
       b += nearHtml(nr, t.ok);
-      b += readyNote("trend", t);
+      b += ofLine("trend", t) + readyNote("trend", t);
       if (t.ok) b += `<div class="ss-line small">entry ${fx(t.entry)} · SL ${fx(t.sl)} · TP ${fx(t.tp)} · 1:${t.rr}</div>`;
       const tside = h4 || t.side || 0;
       out.push(row("trend", "TREND", tside ? side(tside) : `<span class="muted">${tcon.bos_h4 ? "walang " + htf + " BOS" : "walang trend"}</span>`, b, nr.progress ?? 0, t.ok));
+      noteStatus("trend", t.ok, nr.progress ?? 0, tside, tside ? (tside === 1 ? "BUY" : "SELL") : "walang trend", t);
     }
     const p = S.pullback;
     if (p) {
-      const m = p.met || {}, names = { rsi: p.side === -1 ? "Overbought" : "Oversold", mfi: "MFI", doji: "Doji", ob: `OB ${(D.settings && D.settings.pullback && D.settings.pullback.ob_tf) || "M15"} hindi break`, stoch: "Stoch", cci: "CCI", wpr: "W%R", near_ema: "EMA", turn: "Bumabalik", bb_touch: "BB band", engulf: "Engulfing" }, nr = p.near || {};
+      const m = p.met || {}, names = { rsi: p.side === -1 ? "Overbought" : "Oversold", mfi: "MFI", doji: "Doji", ob: `OB ${(D.settings && D.settings.pullback && D.settings.pullback.ob_tf) || "M15"} hindi break`, stoch: "Stoch", cci: "CCI", wpr: "W%R", near_ema: "EMA", turn: "Bumabalik", bb_touch: "BB band", engulf: "Engulfing", of_turn: p.side === -1 ? "OF sellers" : "OF buyers" }, nr = p.near || {};
       const pcfg = (D.settings && D.settings.pullback) || {};
-      const keys = (p.on && p.on.length) ? p.on : Object.keys(pcfg.conditions || {}).filter((k) => pcfg.conditions[k]);
+      const keys = ((p.on && p.on.length) ? p.on : Object.keys(pcfg.conditions || {}).filter((k) => pcfg.conditions[k])).filter((k) => k !== "of_turn");
       const cnt = keys.filter((k) => m[k]).length;
       let b = `<div class="ss-line">${dots(keys.map((k) => [m[k], names[k]]))}</div>` + nearHtml(nr, p.ok);
-      b += readyNote("pullback", p);
+      b += ofLine("pullback", p) + readyNote("pullback", p);
       if (p.ok) b += `<div class="ss-line small">entry ${fx(p.entry)} · SL ${fx(p.sl)} · TP ${fx(p.tp)} · 1:${p.rr}</div>`;
       else if ((p.missing || []).includes("volatile")) b += `<div class="ss-line small c-warn">VOLATILE: naka-hold</div>`;
       out.push(row("pullback", "PULLBACK", p.side ? `${side(p.side)} <b>${cnt}/${keys.length}</b>` : '<span class="muted">walang trend</span>', b, nr.progress ?? Math.round(cnt / Math.max(1, keys.length) * 100), p.ok));
+      noteStatus("pullback", p.ok, nr.progress ?? Math.round(cnt / Math.max(1, keys.length) * 100), p.side, `${cnt}/${keys.length} kondisyon`, p);
     }
     const n = D.news || {};
     const now = Date.now() / 1000;
@@ -4309,6 +4508,7 @@
     const nBadge = n.available ? `<span class="ss-auto ${n.enabled && a.armed ? "live" : ""}">${n.enabled ? "AUTO" + (a.armed ? "" : " (off)") : "MANUAL"}</span>` : "";
     out.push(row("", "NEWS", nst, nb, npct, nok, nBadge));
     box.innerHTML = out.join("");
+    paintStrip();
   }
   async function load() {
     try { const r = await fetch("/api/strategies", { cache: "no-store" }); D = await r.json(); } catch (e) { return; }
@@ -4348,7 +4548,7 @@
       ${off.map((c) => `<div class="spe-it off">${mark(c.key)}<span>${esc(c.label)}</span><button class="btn-sm" data-eon="${c.key}">＋ idagdag</button></div>`).join("") || '<div class="muted small">nasa setup na lahat</div>'}
       <div class="spe-sec">VALUES</div>
       <div class="sys-form">${params}${n === "pullback" ? `<label class="ck"><input type="checkbox" data-ep="block_volatile" ${cfg.block_volatile ? "checked" : ""}> Huwag pumasok kapag VOLATILE</label>` : ""}</div>
-      <div class="spe-foot"><span class="muted small">Magiging <b>CUSTOM</b> ang profile kapag na-save. Pumili ulit ng SCALP / NORMAL / AGGRESSIVE para ibalik.</span>
+      <div class="spe-foot"><span class="muted small">Magiging <b>CUSTOM</b> ang profile kapag na-save. Pumili ulit ng MASTER / SCALP / NORMAL / AGGRESSIVE para ibalik.</span>
         <button class="btn-sm" data-eclose>Cancel</button><button class="btn-sm primary" data-esave>Save</button></div></div>`;
   }
   function readEditInputs() {
@@ -4389,6 +4589,10 @@
       await fetch("/api/strategies/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [n]: { auto: on } }) }).catch(() => null);
       load();
     };
+    if (!on && window.rgModal) {
+      window.rgModal.show(`Gawing MANUAL ang ${title}?`, `<p>Hindi na ito papasukan ng AUTO TRADE hanggang i-AUTO mo ulit (○ → ●).</p>`, "Gawing MANUAL", save, false);
+      return;
+    }
     if (on && window.rgModal) {
       window.rgModal.show(`I-AUTO ang ${title}?`, `<p>Papasukan ng AUTO TRADE ang <b>${title}</b> tuwing mag-<b>READY</b> ito sa pagsara ng ${esc(D.tf)} bar${D.auto.enabled ? "" : " (kapag naka-ON ang AUTO TRADE)"}${D.auto.armed ? "" : " at naka-ARM"}.</p>
         <p class="muted">Dadaan pa rin sa lahat ng gate (risk, session, news, max trades). Hindi nito papasukan ang READY na kanina pa.</p>`, "I-AUTO", save, !D.auto.paper);
@@ -4396,8 +4600,8 @@
   });
   function tick() {
     clearTimeout(timer);
-    const v = $("#view-overview"), c = $("#stratSide");
-    if (v && !v.hidden && c && c.offsetParent !== null) load();
+    const v = $("#view-overview");
+    if (v && !v.hidden) load();                     // v2.8.3: also when the panel is hidden (the strip lights use it)
     timer = setTimeout(tick, 5000);
   }
   setInterval(() => { const v = $("#view-overview"); if (D && v && !v.hidden) render(); }, 1000);   // news countdown
@@ -4427,6 +4631,9 @@
   const label = (k) => NAMES[k] || k;
   // default: the right side shows ONLY the 4 strategies (no scrolling); add others back with ⚙ LAYOUT
   if (!Array.isArray(cfg.hidden)) cfg.hidden = [...right.children].map((e) => e.dataset.lay).filter((k) => k !== "stratSide");
+  // v2.8.4 (Eugene): the "NAKA-ON" indicator chips under the chart are hidden (once) -> bigger chart.
+  // Bring them back with ⚙ LAYOUT if needed.
+  if (!cfg.v284) { if (!cfg.hidden.includes("actInds")) cfg.hidden.push("actInds"); cfg.v284 = true; save(); }
   function apply() {
     const items = [...right.children];
     const ord = cfg.order.filter((k) => items.some((e) => e.dataset.lay === k));
@@ -4474,5 +4681,51 @@
   function close() { if (pop) { pop.remove(); pop = null; } }
   $("#btnLayout").addEventListener("click", (e) => { e.stopPropagation(); open(); });
   document.addEventListener("click", (e) => { if (pop && !e.composedPath().includes(pop) && e.target.id !== "btnLayout") close(); });
+  apply();
+})();
+
+
+// v2.8.2: icon-only menus (sidebar + chart toolbar). ☰ shows the names again; the choice is remembered.
+(function () {
+  const app = document.querySelector(".app");
+  if (!app) return;
+  let on = true;
+  try { on = localStorage.getItem("rg_compact") !== "0"; } catch (e) { /* no storage */ }
+  document.querySelectorAll(".side .nav").forEach((b) => {
+    const name = Array.from(b.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
+    if (name && !b.title) b.title = name;
+  });
+  const tools = document.querySelector(".ch-tools");
+  if (tools) tools.addEventListener("mouseover", (e) => {        // icon-only: the hidden text becomes the tooltip
+    const b = e.target.closest(".tool");
+    const sp = b && b.querySelector("span");
+    if (b && sp && app.classList.contains("compact")) b.title = sp.textContent.trim() + (b.dataset.tip ? " · " + b.dataset.tip : "");
+  });
+  const apply = () => {
+    app.classList.toggle("compact", on);
+    try { localStorage.setItem("rg_compact", on ? "1" : "0"); } catch (e) { /* no storage */ }
+    setTimeout(() => window.dispatchEvent(new Event("resize")), 60);
+  };
+  const t = document.getElementById("btnSideToggle");
+  if (t) t.addEventListener("click", () => { on = !on; apply(); });
+  apply();
+})();
+
+
+// v2.8.3: STRATEGIES panel on the right of the chart can be hidden (default hidden) -> the chart takes the full width.
+// The AUTO strategy buttons above the chart light up instead (green = READY, yellow = MALAPIT).
+(function () {
+  const grid = document.querySelector("#view-overview .ov-grid"), btn = document.getElementById("tsPanel");
+  if (!grid || !btn) return;
+  let show = false;
+  try { show = localStorage.getItem("rg_panel") === "1"; } catch (e) { /* no storage */ }
+  const apply = () => {
+    grid.classList.toggle("nopanel", !show);
+    btn.classList.toggle("on", show);
+    btn.textContent = show ? "◨ ITAGO PANEL" : "◧ PANEL";
+    try { localStorage.setItem("rg_panel", show ? "1" : "0"); } catch (e) { /* no storage */ }
+    setTimeout(() => window.dispatchEvent(new Event("resize")), 60);
+  };
+  btn.addEventListener("click", () => { show = !show; apply(); });
   apply();
 })();

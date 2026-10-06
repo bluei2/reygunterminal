@@ -72,14 +72,6 @@ def test_decision_watch():
     assert de.decide()["state"] == "WATCH"
 
 
-def test_hard_blocker_wins_over_incomplete_setup():
-    hub, tm, de = setup(score=78.0, trigger=False, spread=0.9)
-    d = de.decide()
-    assert d["state"] == "BLOCKED", d
-    assert d["action"] == "NO_TRADE", d
-    assert any(b["code"] == "SPREAD_TOO_HIGH" for b in d["blocking_reasons"]), d
-
-
 def test_blocked_when_disarmed():
     hub, tm, de = setup(armed=False)
     d = de.decide()

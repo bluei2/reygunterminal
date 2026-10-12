@@ -13,15 +13,22 @@ import traceback
 import mt5_ops
 
 
-def worker_main(path, expected_login, cmd_q, res_q):
+def worker_main(path, expected_login, cmd_q, res_q, password=None, server=None):
     try:
         import MetaTrader5 as mt5
     except ImportError:
         res_q.put(("__init__", dict(ok=False, error="MetaTrader5 package not installed")))
         return
     kw = {"path": path} if path else {}
+    if expected_login and password:
+        # v2.8.29: SuperChart logs this MT5 terminal in itself (login + password + server from Accounts)
+        kw.update(login=int(expected_login), password=str(password))
+        if server:
+            kw["server"] = str(server)
     if not mt5.initialize(**kw):
-        res_q.put(("__init__", dict(ok=False, error=f"MT5 initialize failed for {path}: {mt5.last_error()}")))
+        err = mt5.last_error()
+        hint = " (mali ba ang login / password / server?)" if kw.get("password") else ""
+        res_q.put(("__init__", dict(ok=False, error=f"MT5 initialize failed for {path}: {err}{hint}")))
         return
     acc = mt5_ops.account(mt5)
     if expected_login and acc.get("ok") and int(acc["login"]) != int(expected_login):
@@ -49,10 +56,11 @@ def worker_main(path, expected_login, cmd_q, res_q):
 class RemoteMT5:
     """Main-process handle to a follower worker. call() is thread safe and blocking."""
 
-    def __init__(self, path, expected_login=None, start_timeout=40.0):
+    def __init__(self, path, expected_login=None, start_timeout=40.0, password=None, server=None):
         ctx = mp.get_context("spawn")
         self.cmd_q, self.res_q = ctx.Queue(), ctx.Queue()
-        self.proc = ctx.Process(target=worker_main, args=(path, expected_login, self.cmd_q, self.res_q), daemon=True)
+        self.proc = ctx.Process(target=worker_main, args=(path, expected_login, self.cmd_q, self.res_q, password, server),
+                                daemon=True)
         self.proc.start()
         self._lock = threading.Lock()
         self._rid = 0

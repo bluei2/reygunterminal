@@ -826,6 +826,35 @@ def build_reversal(view, reg, cfg, kind):
     return fc, ""
 
 
+def strategy_snapshot(stm, S, i, e):
+    """v2.8.45 (audit): the indicator VALUES behind a strategy forecast at its bar (not only met / missed labels), so
+    \"why did the system make this forecast?\" can be answered in numbers later. Only data of bar i (closed)."""
+    def v(key, nd=2):
+        arr = S.get(key)
+        x = arr[i] if arr and i < len(arr) else None
+        return round(x, nd) if isinstance(x, (int, float)) else None
+    out = dict(mmi=v("mmi", 1), cmi=v("cmi", 1), adx=v("adx", 1), rsi=v("rsi", 1), mfi=v("mfi", 1), atr=v("atr", 3),
+               ema20=v("ema20"), ema50=v("ema50"), close=v("c"), route=stm.route_zone(S, i, {}))
+    try:
+        for tf, w in (("H4", 30), ("M15", 32), ("M5", 32)):
+            m = stm.mtf_state(S, i, tf, w)
+            if m:
+                out[f"bos_{tf.lower()}"] = dict(last=m.get("last"), age=m.get("age"), up=m.get("up"), dn=m.get("dn"))
+    except Exception:
+        pass
+    try:
+        cv = stm.cvd_change(S, i, 8)
+        out["cvd_change8"] = round(cv, 1) if cv is not None else None
+    except Exception:
+        out["cvd_change8"] = None
+    out["cvd_source"] = "estimated (OHLC + tick volume, " + ("M5" if (S.get("cvd") or {}).get("m5") else "entry TF") + ")"
+    for k in ("box_high", "box_low", "ob_lo", "ob_hi", "spike"):
+        if e.get(k) is not None:
+            out[k] = e[k]
+    out["met"] = {k: bool(x) for k, x in (e.get("met") or {}).items()}
+    return out
+
+
 def build_strategy(view, reg, cfg, setup):
     """The Trading-page STRATEGIES (strategies.py) as forecasts on the forecast timeframe, on the bar where the
     strategy turns OK (fresh). TREND / PULLBACK: one MARKET forecast. CONSOLIDATION: TWO BREAKOUT forecasts
@@ -857,6 +886,8 @@ def build_strategy(view, reg, cfg, setup):
     met = [stm.label(name, k) for k in e["on"] if e["met"].get(k)]
     miss = [stm.label(name, k) for k in e["on"] if not e["met"].get(k)]
 
+    snap = strategy_snapshot(stm, S, i, e)
+
     def rec(d, entry_type, entry, sl, tp, trigger=None, confirm=None):
         risk = abs(entry - sl)
         return dict(symbol=view.get("symbol", ""), direction=DIRW[d], dir=d, regime=reg.get("regime") or "NO_BIAS",
@@ -874,7 +905,7 @@ def build_strategy(view, reg, cfg, setup):
                     news_risk=view.get("news") or "n/a", spread_at_creation=view.get("spread"),
                     why=[f"STRATEGY {stm.TITLE[name]} {e['score']:.0f}% ≥ {scfg['min_pct']:.0f}%"] + met,
                     risks=[f"not met: {x}" for x in miss], smc_setup_id=None, profile=view.get("profile", "LIVE"),
-                    setup_type=setup)
+                    setup_type=setup, values=snap)
     if name == "conso":
         p = e
         legs = [rec(1, "BREAKOUT", p["buy_stop"], p["buy_sl"], p["buy_tp"], p["buy_stop"], "touch"),
@@ -1379,7 +1410,28 @@ def _block(rs):
                 avg_score=round(sum(r["analyser_score"] for r in rs) / n, 1) if n else None,
                 avg_mfe_r=round(sum(r.get("mfe_r", 0) for r in trig) / len(trig), 2) if trig else None,
                 avg_mae_r=round(sum(r.get("mae_r", 0) for r in trig) / len(trig), 2) if trig else None,
-                avg_duration_min=round(sum(dur) / len(dur), 1) if dur else None)
+                avg_duration_min=round(sum(dur) / len(dur), 1) if dur else None,
+                **_streaks_and_times(rs))
+
+
+def _streaks_and_times(rs):
+    """v2.8.45 (audit): max consecutive wins / losses (resolved TP / SL in time order), average minutes from creation
+    to trigger, and average minutes to TP and to SL separately."""
+    seq = sorted((r for r in rs if r.get("status") in ("TP_HIT", "SL_HIT")), key=lambda r: r.get("created_at") or 0)
+    best = {"TP_HIT": 0, "SL_HIT": 0}
+    run, last = 0, None
+    for r in seq:
+        run = run + 1 if r["status"] == last else 1
+        last = r["status"]
+        best[last] = max(best[last], run)
+
+    def avg(xs):
+        xs = [x for x in xs if x is not None]
+        return round(sum(xs) / len(xs), 1) if xs else None
+    trig = avg([(r["trigger_time"] - r["created_at"]) / 60 for r in rs if r.get("trigger_time") and r.get("created_at")])
+    return dict(max_win_streak=best["TP_HIT"], max_loss_streak=best["SL_HIT"], avg_min_to_trigger=trig,
+                avg_min_to_tp=avg([r.get("duration_min") for r in rs if r.get("status") == "TP_HIT"]),
+                avg_min_to_sl=avg([r.get("duration_min") for r in rs if r.get("status") == "SL_HIT"]))
 
 
 def statistics(records, min_samples=30):

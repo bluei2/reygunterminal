@@ -37,7 +37,8 @@ def stair_bars(n=1200, d=1, step=900):
 def legacy_conso(cfg=None):
     """The v2.1 consolidation rule (volume + ADX + box, 4 quiet candles) as a CUSTOM setting."""
     c = dict(cfg or ST.load_settings()["conso"])
-    c.update(quiet_bars=4, max_range=10.0, conditions=dict(c["conditions"], vol_low=True, adx_low=True, box=True, of_balanced=False),
+    c.update(quiet_bars=4, max_range=10.0, conditions=dict(c["conditions"], vol_low=True, adx_low=True, box=True, of_balanced=False,
+                                                         mmi_cmi=False),
              required=["vol_low", "adx_low", "box"])
     return c
 
@@ -54,6 +55,9 @@ def legacy():
     p["required"] = ["rsi", "mfi", "doji", "ob", "of_turn"]
     p["conditions"].update(mfi=True, doji=True)
     p["rr"] = 1.5
+    for n in ST.NAMES:                                  # the v2.8.43 MMI / CMI check: off for these synthetic charts
+        s[n]["conditions"]["mmi_cmi"] = False
+        s[n]["required"] = [k for k in s[n]["required"] if k != "mmi_cmi"]
     return s
 
 
@@ -97,7 +101,7 @@ def test_trend_signals_follow_the_trend_with_own_sl_tp():
         assert sig and all(g["side"] == d for g in sig), (d, len(sig))
         g = sig[-1]
         risk = abs(g["entry"] - g["sl"])
-        assert (g["entry"] - g["sl"]) * d > 0 and abs(abs(g["tp"] - g["entry"]) - 2 * risk) < 0.05
+        assert (g["entry"] - g["sl"]) * d > 0 and abs(abs(g["tp"] - g["entry"]) - cfg["trend"]["rr"] * risk) < 0.05
 
 
 def test_pullback_blocked_when_volatile_and_can_be_off():
@@ -114,7 +118,7 @@ def test_pullback_blocked_when_volatile_and_can_be_off():
 def test_low_volume_grid_plan():
     bars = box_bars()
     bars = [Bar(b.t, b.o, b.h, b.l, b.c, 300 if k < len(bars) - 25 else 40) for k, b in enumerate(bars)]   # volume dries up
-    cfg = legacy_conso()
+    cfg = dict(legacy_conso(), levels=2)                       # a 2-level grid (AGGRESSIVE)
     S = ST.series(bars)
     e = ST._eval_conso(bars, S, len(bars) - 2, cfg)
     assert e["met"]["vol_low"] and e["met"]["adx_low"], e["met"]
@@ -147,7 +151,7 @@ def test_trend_needs_fresh_alignment():
 def test_trend_is_2_m15_bos_plus_h4_bos():
     """TREND (Eugene): every signal has >= 2 M15 BOS in its direction (the last one too) and the latest H4 BOS
     in that direction; the real M15 / H4 bars give the same answer as resampling."""
-    assert ST.load_settings()["trend"]["required"] == ["bos_m15", "bos_h4", "of_buyers", "not_extreme"]
+    assert ST.load_settings()["trend"]["required"] == ["bos_m15", "bos_h4", "of_buyers", "not_extreme", "mmi_cmi"]
     cfg = legacy()["trend"]
     assert cfg["required"] == ["bos_m15", "bos_h4", "of_buyers"] and cfg["bos_m15_min"] == 2
     bars = stair_bars(1200, 1)
@@ -180,10 +184,10 @@ def test_old_settings_get_the_new_trend_and_conso_rules():
                      "auto": True},
            "conso": {"conditions": {"box": False, "squeeze": True}, "required": ["adx_low", "vol_low"], "levels": 3}}
     s = ST.clean_settings(old)
-    assert s["trend"]["required"] == ["bos_m15", "bos_h4", "of_buyers", "not_extreme"] and not s["trend"]["conditions"]["macd"]
-    assert s["trend"]["rr"] == 2.5 and s["trend"]["auto"] is True                    # your other values stay
-    assert s["conso"]["required"] == ["adx_low", "of_balanced"] and not s["conso"]["conditions"]["box"]          # v2.4: ADX < 20 alone
-    assert s["conso"]["levels"] == 3 and s["schema"] == ST.SCHEMA
+    assert s["trend"]["required"] == ["bos_m15", "bos_h4", "of_buyers", "not_extreme", "mmi_cmi"] and not s["trend"]["conditions"]["macd"]
+    assert s["trend"]["rr"] == 5.0 and s["trend"]["auto"] is True                    # your other values stay
+    assert s["conso"]["required"] == ["adx_low", "of_balanced", "mmi_cmi"] and not s["conso"]["conditions"]["box"]          # v2.4: ADX < 20 alone
+    assert s["conso"]["levels"] == 1 and s["conso"]["max_range"] == 10.0 and s["schema"] == ST.SCHEMA   # v2.8.49 Oct 7 setup
     assert ST.clean_settings(s) == s                                              # migrates only once
 
 
@@ -216,7 +220,7 @@ def test_one_chart_indicator_per_strategy():
     assert any(m.char.startswith("TR▲") for m in ov.markers) and any(m.char.startswith("H4") for m in ov.markers)
     b2 = [Bar(b.t, b.o, b.h, b.l, b.c, 300 if k < 295 else 40) for k, b in enumerate(box_bars())]
     ov2 = mod.ConsolidationStrategy().compute(b2, "M5", None)
-    assert ov2.zones and "OCO" in ov2.zones[-1].label and "2/2" in ov2.zones[-1].label         # ADX < 20 + order flow (no ticks: not judged)
+    assert ov2.zones and "OCO" in ov2.zones[-1].label and "3/3" in ov2.zones[-1].label         # ADX < 20 + order flow (no ticks: not judged)
 
 
 # ---------------------------------------------------------------- AUTO TRADE
@@ -439,7 +443,8 @@ def test_every_checked_condition_must_pass():
     i = len(bars) - 1
     zone = dict(side=1, lo=bars[-1].l - 0.5, hi=bars[-1].l + 0.5, i=i - 30, t=bars[i - 30].t, created=i - 20, broken=None)
     S = dict(ST.series(bars), obs=[zone])
-    base = dict(ST.load_settings()["pullback"], block_volatile=False)
+    base = dict(legacy()["pullback"], block_volatile=False, required=["rsi", "ob_spike", "of_turn"],
+                conditions=dict(legacy()["pullback"]["conditions"], mfi=False, doji=False))
     assert ST.evaluate("pullback", bars, S, i, base, 1)["ok"]                 # the 4 conditions: all met
     cfg = dict(base, min_pct=s["pullback"]["min_pct"], conditions=dict(base["conditions"], near_ema=True))
     e = ST.evaluate("pullback", bars, S, i, cfg, 1)
@@ -452,14 +457,17 @@ def test_profiles_change_settings_but_never_switch_auto_on():
     ag = ST.apply_profile(cur, "aggressive")
     assert ag["profile"] == "aggressive" and ag["htf_filter"] is False
     assert ag["trend"]["auto"] is True and ag["pullback"]["auto"] is False and ag["conso"]["auto"] is False
-    assert ag["trend"]["bos_m15_min"] == 1 and ag["pullback"]["required"] == ["rsi", "mfi", "ob", "of_turn"]
+    assert ag["trend"]["bos_m15_min"] == 1 and ag["pullback"]["required"] == ["rsi", "ob_spike", "mmi_cmi"]   # v2.8.38
     assert not ag["pullback"]["conditions"]["doji"] and ag["conso"]["quiet_bars"] == 1
     sc = ST.apply_profile(ag, "scalp")
-    assert (sc["trend"]["bos_ltf"], sc["trend"]["bos_htf"], sc["trend"]["rr"]) == ("M5", "H1", 1.0)
+    assert (sc["trend"]["bos_ltf"], sc["trend"]["bos_htf"], sc["trend"]["rr"]) == ("M5", "H1", 3.0)    # v2.8.38
+    assert sc["trend"]["max_sl"] == 15.0 and sc["pullback"]["max_sl"] == 15.0 and sc["conso"]["max_sl"] == 15.0 and ag["trend"]["max_sl"] == 20.0
     assert sc["conso"]["levels"] == 1 and ST.PROFILES["scalp"]["auto_tf"] == "M5"
     nm = ST.apply_profile(sc, "normal")
     assert (nm["trend"]["bos_ltf"], nm["trend"]["bos_htf"], nm["trend"]["bos_m15_min"]) == ("M15", "H4", 2)
-    assert nm["pullback"]["required"] == ["rsi", "ob", "of_turn"] and nm["htf_filter"] is True     # v2.7.8
+    assert nm["pullback"]["required"] == ["rsi", "ob_spike", "of_turn", "mmi_cmi"] and nm["htf_filter"] is True  # v2.8.49
+    assert nm["trend"]["rr"] == 5.0 and nm["trend"]["required"] == ["bos_m15", "bos_h4", "of_buyers", "not_extreme", "mmi_cmi"]
+    assert nm["pullback"]["os"] == 40.0 and nm["conso"]["max_range"] == 10.0 and not any(nm[n]["route"] for n in ST.NAMES)
     assert ST.clean_settings(nm) == nm
     bad = ST.clean_settings({"schema": ST.SCHEMA, "trend": {"bos_ltf": "H4", "bos_htf": "M5"}, "profile": "zzz"})
     assert ST.MTF_TFS[bad["trend"]["bos_htf"]] > ST.MTF_TFS[bad["trend"]["bos_ltf"]] and bad["profile"] == "normal"
@@ -467,6 +475,8 @@ def test_profiles_change_settings_but_never_switch_auto_on():
 
 def test_scalp_trend_uses_m5_and_h1_structure():
     cfg = ST.apply_profile(ST.default_settings(), "scalp")["trend"]
+    cfg["conditions"]["not_extreme"] = False                        # a synthetic stair is always "extreme": the
+    cfg["required"] = [k for k in cfg["required"] if k != "not_extreme"]   # structure is what is tested here
     m5 = stair_bars(1200, 1, step=300)                                # the same structure, 3x faster
     S = ST.series(m5)
     sig = ST.signals("trend", m5, cfg, None, 1100, S=S)
@@ -474,14 +484,14 @@ def test_scalp_trend_uses_m5_and_h1_structure():
     for g in sig:
         assert ST.mtf_state(S, g["i"], "M5", cfg["bos_window"])["up"] >= 2
         assert ST.mtf_state(S, g["i"], "H1", cfg["h4_window"])["last"] == 1
-    assert abs(abs(sig[-1]["tp"] - sig[-1]["entry"]) - abs(sig[-1]["entry"] - sig[-1]["sl"])) < 0.05   # 1:1
+    assert abs(abs(sig[-1]["tp"] - sig[-1]["entry"]) - 3 * abs(sig[-1]["entry"] - sig[-1]["sl"])) < 0.05   # 1:3
 
 
 def test_schema2_pullback_gets_only_the_4_conditions():
     s = ST.clean_settings({"schema": 2, "pullback": {"conditions": {"stoch": True, "turn": True}, "rr": 2.5}})
     assert not s["pullback"]["conditions"]["stoch"] and not s["pullback"]["conditions"]["turn"]
-    assert [k for k, v in s["pullback"]["conditions"].items() if v] == ["rsi", "ob_spike", "of_turn"]   # + v2.8.21
-    assert s["pullback"]["rr"] == 2.5
+    assert [k for k, v in s["pullback"]["conditions"].items() if v] == ["rsi", "ob_spike", "of_turn", "mmi_cmi"]   # + v2.8.21
+    assert s["pullback"]["rr"] == 5.0
 
 
 def test_htf_filter_off_follows_the_strategy_own_trend():
@@ -523,14 +533,14 @@ def test_status_tells_if_ready_is_a_new_signal():
 # ---------------------------------------------------------------- v2.4: ADX < 20 alone, all green -> trade
 def test_adx_below_20_alone_places_the_pending_orders():
     cfg = ST.load_settings()["conso"]
-    assert cfg["required"] == ["adx_low", "of_balanced"] and cfg["quiet_bars"] == 1
-    assert [k for k, v in cfg["conditions"].items() if v] == ["adx_low", "of_balanced"]
+    assert cfg["required"] == ["adx_low", "of_balanced", "mmi_cmi"] and cfg["quiet_bars"] == 1
+    assert [k for k, v in cfg["conditions"].items() if v] == ["adx_low", "of_balanced", "mmi_cmi"]
     loud = box_bars()                                            # normal volume everywhere: volume does not matter now
     S = ST.series(loud)
     i = next(k for k in range(len(loud) - 2, 80, -1) if S["adx"][k] is not None and S["adx"][k] < 20)
     e = ST._eval_conso(loud, S, i, cfg)
     assert e["ok"] and e["met"]["adx_low"] and not e["met"]["vol_low"], (e["missing"], e["why"])
-    assert e["buy_stop"] > e["box_high"] and e["sell_stop"] < e["box_low"] and e["count"] == e["count_of"] == 2
+    assert e["buy_stop"] > e["box_high"] and e["sell_stop"] < e["box_low"] and e["count"] == e["count_of"] == 3
 
 
 def test_auto_takes_a_strategy_that_is_still_all_green_once():
@@ -605,7 +615,7 @@ def test_strategy_panel_extra_indicators_and_schema5():
             assert not e["ok"] or all(e["met"][k] for k in keys)
     # a schema-4 file with the old aggressive consolidation numbers (ADX < 25, 3 quiet candles) is reset
     old = ST.clean_settings({"schema": 4, "conso": {"adx_max": 25, "quiet_bars": 3, "rr": 1.5}})
-    assert old["conso"]["adx_max"] == 20 and old["conso"]["quiet_bars"] == 1 and old["conso"]["rr"] == 1.5
+    assert old["conso"]["adx_max"] == 20 and old["conso"]["quiet_bars"] == 1 and old["conso"]["rr"] == 5.0
 
 
 def test_trend_kontra_ob_in_the_way_and_overbought():
@@ -717,14 +727,11 @@ def test_order_flow_is_on_in_every_strategy_and_old_settings_get_it():
     cfg = ST.load_settings()
     for n, k in ST.OF_KEY.items():
         assert cfg[n]["conditions"][k] and k in cfg[n]["required"]
-        for p in ST.PROFILES:
-            if p == "master":
-                continue                    # MASTER = the MT5 Master EA rules: CVD (TREND) instead of live order flow
-            assert k in ST.apply_profile(cfg, p)[n]["required"]
+        # v2.8.38: the 3 modes are all built on the SC logic (no live order-flow condition in the profiles)
     old = ST.clean_settings({"schema": 5, "trend": {"required": ["bos_m15", "bos_h4"], "rr": 2.5},
                              "pullback": {"required": ["rsi", "mfi", "ob"]}})
-    assert old["trend"]["required"][-1] == "of_buyers" and old["trend"]["rr"] == 2.5
-    assert old["pullback"]["required"] == ["rsi", "ob_spike", "of_turn"]           # v2.7.8 refine + v2.8.21 OB or spike
+    assert "of_buyers" in old["trend"]["required"] and old["trend"]["rr"] == 5.0
+    assert sorted(old["pullback"]["required"]) == sorted(["rsi", "ob_spike", "of_turn", "mmi_cmi"])           # v2.7.8 refine + v2.8.21 OB or spike
     assert ST.clean_settings(old) == old
 
 
@@ -732,7 +739,7 @@ def test_everything_on_by_default_and_old_files_get_auto():
     import autotrade as A
     assert A.DEFAULTS["auto_on_start"] and A.DEFAULTS["news_on_start"]
     s = ST.clean_settings({"schema": 6, "trend": {"auto": False}, "conso": {"auto": False, "rr": 1.7}})
-    assert s["trend"]["auto"] and s["pullback"]["auto"] and s["conso"]["rr"] == 1.7
+    assert s["trend"]["auto"] and s["pullback"]["auto"] and s["conso"]["rr"] == 5.0
     assert s["conso"]["auto"] is True                                      # v2.8.3: CONSO always AUTO (once)
     s4 = ST.clean_settings(dict(s, conso=dict(s["conso"], auto=False)))
     assert s4["conso"]["auto"] is False                                    # switched to MANUAL later: kept
@@ -768,11 +775,11 @@ def test_v277_trend_sl_at_last_swing():
     assert sw is not None and sw <= bars[79].c
     assert ST.last_swing(bars, 79, 1, look=5) is None or ST.last_swing(bars, 79, 1, look=5) < bars[79].c
     cfg = ST.default_settings()
-    assert cfg["trend"]["sl_mode"] == "swing" and cfg["trend"]["rr"] == 2.0
-    assert ST.apply_profile(cfg, "aggressive")["trend"]["sl_mode"] == "atr"
+    assert cfg["trend"]["sl_mode"] == "swing" and cfg["trend"]["rr"] == 5.0
+    assert ST.apply_profile(cfg, "aggressive")["trend"]["sl_mode"] == "swing"          # v2.8.38: swing everywhere
     assert ST.apply_profile(cfg, "normal")["trend"]["sl_mode"] == "swing"
     old = ST.clean_settings({"schema": 8, "profile": "normal", "trend": {"sl_mode": "atr", "rr": 2.5}})
-    assert old["trend"]["sl_mode"] == "swing" and old["trend"]["rr"] == 2.5          # once; your RR stays
+    assert old["trend"]["sl_mode"] == "swing" and old["trend"]["rr"] == 5.0          # once; your RR stays
     later = ST.clean_settings(dict(old, trend=dict(old["trend"], sl_mode="atr")))
     assert later["trend"]["sl_mode"] == "atr"                                        # switched back later: kept
     agg = ST.clean_settings({"schema": 8, "profile": "aggressive", "trend": {"sl_mode": "atr"}})
@@ -805,14 +812,14 @@ def test_v277_trend_swing_sl_bounds():
 def test_v278_refine_defaults_and_migration():
     d = ST.default_settings()
     assert d["trend"]["h4_window"] == 12 and "not_extreme" in d["trend"]["required"]
-    assert d["pullback"]["required"] == ["rsi", "ob_spike", "of_turn"] and d["pullback"]["rr"] == 2.0
+    assert d["pullback"]["required"] == ["rsi", "ob_spike", "of_turn", "mmi_cmi"] and d["pullback"]["rr"] == 5.0
     assert not d["pullback"]["conditions"]["mfi"] and not d["pullback"]["conditions"]["doji"]
     old = ST.clean_settings({"schema": 9, "profile": "normal",
                              "trend": {"h4_window": 30, "required": ["bos_m15", "bos_h4", "of_buyers"]},
                              "pullback": {"rr": 1.5, "required": ["rsi", "mfi", "doji", "ob", "of_turn"],
                                           "conditions": {"mfi": True, "doji": True}}})
     assert old["trend"]["h4_window"] == 12 and "not_extreme" in old["trend"]["required"]
-    assert old["pullback"]["required"] == ["rsi", "ob_spike", "of_turn"] and old["pullback"]["rr"] == 2.0
+    assert old["pullback"]["required"] == ["rsi", "ob_spike", "of_turn", "mmi_cmi"] and old["pullback"]["rr"] == 5.0
     again = ST.clean_settings(dict(old, pullback=dict(old["pullback"], required=old["pullback"]["required"] + ["mfi"])))
     assert "mfi" in again["pullback"]["required"]                                  # your later choice stays
     agg = ST.clean_settings({"schema": 9, "profile": "aggressive", "trend": {"h4_window": 30}})
@@ -979,7 +986,7 @@ def test_v2820_new_conso_box_replaces_the_old_grid_without_ping_pong():
 def test_v2821_migration_ob_to_ob_spike_once():
     s = ST.clean_settings({"schema": 14, "pullback": {"conditions": {"ob": True}, "required": ["rsi", "ob", "of_turn"]}})
     assert s["pullback"]["conditions"]["ob_spike"] and not s["pullback"]["conditions"]["ob"]
-    assert s["pullback"]["required"] == ["rsi", "ob_spike", "of_turn"]
+    assert s["pullback"]["required"] == ["rsi", "ob_spike", "of_turn", "mmi_cmi"]
     m = ST.apply_profile(ST.default_settings(), "master")["pullback"]
     assert m["conditions"]["ob_spike"] and not m["conditions"]["ob"] and "ob_spike" in m["required"]
 
@@ -1019,3 +1026,84 @@ def test_v2823_sl_capped_at_20_dollars_and_no_pct_block():
         small = dict(sg, sl=4160.0 + 12.0)
         assert at._cap_sl(small, name) == small                      # inside $20: the strategy's own stop
     ST.save_settings(ST.default_settings())
+
+
+
+def test_v2838_three_modes():
+    import autotrade as AT
+    for name, rr, mult, tf in (("normal", 5.0, 1.0, "M15"), ("aggressive", 3.0, 2.0, "M15"), ("scalp", 3.0, 1.0, "M5")):
+        p = ST.PROFILES[name]
+        a = ST.apply_profile(ST.default_settings(), name)
+        assert p["auto_tf"] == tf and p["autotrade"]["mode_mult"] == mult and p["protect"]["be_r"] == 0.5
+        assert p["protect"]["trail_mode"] == "step" and p["protect"]["step_r"] == 0.5
+        for n in ("trend", "pullback", "conso"):
+            assert a[n]["rr"] == rr, (name, n)
+        if name == "normal":                           # v2.8.49: the Oct 7 setup (HTF filter + order flow)
+            assert a["pullback"]["required"] == ["rsi", "ob_spike", "of_turn", "mmi_cmi"] and a["htf_filter"] is True
+        else:
+            assert a["pullback"]["required"] == ["rsi", "ob_spike", "mmi_cmi"] and a["htf_filter"] is False
+    assert AT.DEFAULTS["mode_mult"] == 1.0
+
+
+
+def test_v2839_scalp_max_sl_150_pips():
+    p = ST.PROFILES["scalp"]
+    assert p["trend"]["max_sl"] == 15.0 and p["pullback"]["max_sl"] == 15.0 and p["autotrade"]["tl_max_sl"] == 15.0
+    assert p["conso"]["max_sl"] == 15.0                                   # v2.8.40: CONSO too
+
+
+def test_v2841_conso_max_sl_matches_the_others():
+    for name in ("normal", "aggressive", "scalp"):
+        p = ST.PROFILES[name]
+        assert p["conso"]["max_sl"] == p["trend"]["max_sl"] == p["pullback"]["max_sl"], name
+    old = ST.clean_settings({"schema": 18, "trend": {"max_sl": 20.0}, "conso": {"max_sl": 8.0}})
+    assert old["conso"]["max_sl"] == 20.0
+
+
+def test_v2842_conso_levels_per_mode():
+    assert ST.PROFILES["normal"]["conso"]["levels"] == 1
+    assert ST.PROFILES["aggressive"]["conso"]["levels"] == 2
+    assert ST.PROFILES["scalp"]["conso"]["levels"] == 1
+    assert ST.clean_settings({"schema": 19, "profile": "normal", "conso": {"levels": 2}})["conso"]["levels"] == 1
+    assert ST.clean_settings({"schema": 19, "profile": "aggressive", "conso": {"levels": 2}})["conso"]["levels"] == 2
+
+
+
+def test_v2843_mmi_cmi_regimes():
+    import random
+    random.seed(7)
+    trend = stair_bars(400, 1)
+    S = ST.series(trend)
+    i = len(trend) - 1
+    assert S["cmi"][i] is not None and S["mmi"][i] is not None
+    assert ST.mmi_cmi(S, i, "trend", dict(cmi_trend=45.0))           # a clean stair = trending
+    assert not ST.mmi_cmi(S, i, "chop", dict(cmi_chop=40.0))
+    flat = [Bar(b.t, 2650.0, 2650.0 + random.random(), 2649.0 - random.random(), 2649.5 + random.random(), 100)
+            for b in trend]
+    S2 = ST.series(flat)
+    assert S2["cmi"][i] < 60 and 55 <= S2["mmi"][i] <= 95                # random noise ~ mean-reverting
+    young = ST.series(trend[:50])
+    assert ST.mmi_cmi(young, 49, "trend", {}) and ST.mmi_cmi(young, 49, "chop", {})   # warm-up never blocks
+    for n in ("trend", "pullback", "conso"):
+        for prof in ("normal", "aggressive", "scalp"):
+            a = ST.apply_profile(ST.default_settings(), prof)
+            assert a[n]["conditions"]["mmi_cmi"] and "mmi_cmi" in a[n]["required"], (prof, n)
+
+
+def test_v2849_back_to_the_oct7_setup_once():
+    """v2.8.49 (Eugene: "ok pa hanggang Oct 7 ... ibalik sa dati"): a v2.8.48 NORMAL file gets exactly what ran until Oct 7."""
+    raw = {"schema": 25, "profile": "normal", "htf_filter": False,
+           "trend": {"auto": True, "conditions": {"bos_retest": True}, "required": ["bos_retest", "bos_h4", "not_range"]},
+           "pullback": {"auto": False, "os": 30.0, "ob": 70.0, "required": ["rsi", "ob_spike", "mmi_cmi"], "route": True},
+           "conso": {"auto": True, "required": ["adx_low", "mmi_cmi"], "max_range": 0.0, "route": True}}
+    s = ST.clean_settings(raw)
+    assert s["htf_filter"] is True and s["schema"] == ST.SCHEMA
+    assert s["trend"]["required"] == ["bos_m15", "bos_h4", "of_buyers", "not_extreme", "mmi_cmi"]
+    assert s["pullback"]["required"] == ["rsi", "ob_spike", "of_turn", "mmi_cmi"] and (s["pullback"]["os"], s["pullback"]["ob"]) == (40.0, 60.0)
+    assert s["conso"]["required"] == ["adx_low", "of_balanced", "mmi_cmi"] and s["conso"]["max_range"] == 10.0
+    assert not any(s[n]["route"] for n in ST.NAMES) and s["pullback"]["auto"] is False      # AUTO switches stay
+    assert ST.clean_settings(s) == s                                                         # once
+    later = ST.clean_settings(dict(s, htf_filter=False))
+    assert later["htf_filter"] is False                                                      # your later choice stays
+    ag = ST.clean_settings(dict(raw, profile="aggressive"))
+    assert "of_turn" in ag["pullback"]["required"] and ag["pullback"]["route"] is False

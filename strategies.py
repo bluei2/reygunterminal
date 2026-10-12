@@ -46,6 +46,7 @@ CATALOG = {
         ("not_extreme", "KONTRA: hindi overbought (BUY: RSI < rsi_hi) / hindi oversold (SELL: RSI > rsi_lo)", True),
         ("no_ob_block", "KONTRA: walang order block (ob_tf) na nakaharang sa daan; kapag na-break ito, tuloy ang entry", False),
         ("m5_struct", "M5 STRUCTURE: ang huling M5 BOS ay nasa direksyon (walang BUY habang pababa pa ang M5)", False),
+        ("mmi_cmi", "MMI / CMI = TREND: CMI ≥ cmi_trend (malayo ang narating vs range) O MMI bumababa (trend na nabubuo)", True),
         ("cvd", "CVD: tumataas ang CVD (BUY) / bumababa (SELL) - delta ng M5 bars sa huling cvd_bars kandila (cvd_mode turn2: huling 2)", False),
     ],
     "pullback": [
@@ -62,6 +63,7 @@ CATALOG = {
         ("of_turn", "ORDER FLOW: pumasok na ang buyers (BUY) / sellers (SELL) sa dulo ng pullback: delta ng huling 2 bars sa direksyon", True),
         ("bb_touch", "Tumama sa Bollinger band (BUY lower / SELL upper) sa huling 6 bars", False),
         ("engulf", "Engulfing candle sa direksyon ng trade (bar na ito o nauna)", False),
+        ("mmi_cmi", "MMI / CMI: hindi runaway trend (MMI ≥ mmi_rev O CMI ≤ cmi_rev) = may babalikan ang presyo", True),
     ],
     "conso": [
         ("adx_low", "ADX < adx_max (20) → BUY STOP / SELL STOP agad (sa box kung meron, o sa huling range_bars)", True),
@@ -72,6 +74,7 @@ CATALOG = {
         ("of_balanced", "ORDER FLOW: balanse ang buyers at sellers (|delta| < of_min % ng volume) = totoong consolidation", True),
         ("rsi_mid", "RSI nasa gitna (40–60): walang direksyon", False),
         ("inside_bb", "Presyo nasa loob ng Bollinger bands (huling quiet_bars kandila)", False),
+        ("mmi_cmi", "MMI / CMI = CHOP: CMI ≤ cmi_chop (paikot-ikot) at hindi bumababa ang MMI (walang trend na nabubuo)", True),
     ],
 }
 # TREND: the trend indicators together (score) + EMA order + ADX strength; BOS is a counted condition, not a must
@@ -81,24 +84,24 @@ CATALOG = {
 # TREND (Eugene, 2026-10-01): 2 BOS on M15 + 1 BOS on H4 in the same direction. CONSO: volume + ADX + box (3)
 # v2.7.8 refine (Eugene, 2026-10-03; picked on Mar-Jun 2026, checked on Jul-Sep): TREND + KONTRA not_extreme,
 # PULLBACK = RSI + order block (+ order flow) - MFI + doji together never fired
-REQUIRED = {"trend": ["bos_m15", "bos_h4", "of_buyers", "not_extreme"], "pullback": ["rsi", "ob_spike", "of_turn"],
-            "conso": ["adx_low", "of_balanced"]}
+REQUIRED = {"trend": ["bos_m15", "bos_h4", "of_buyers", "not_extreme", "mmi_cmi"],     # v2.8.49: order flow back
+            "pullback": ["rsi", "ob_spike", "of_turn", "mmi_cmi"], "conso": ["adx_low", "of_balanced", "mmi_cmi"]}
 # ORDER FLOW per strategy (Eugene, 2026-10-02: "i-ON mo na"): what order flow must say for each strategy
 OF_KEY = {"trend": "of_buyers", "pullback": "of_turn", "conso": "of_balanced"}
 # CONSO (Eugene, 2026-10-01): "matagal bumaba ang ADX below 20" -> ADX < 20 alone places the pending orders
 # 100% (Eugene, 2026-10-01): "per strategy na tayo": a strategy enters only when EVERY condition you checked is met
-SCHEMA = 16      # saved settings older than this get the new conditions / required lists (other values are kept)
+SCHEMA = 26      # saved settings older than this get the new conditions / required lists (other values are kept)
 MTF_TFS = {"M5": 300, "M15": 900, "H1": 3600, "H4": 14400}     # timeframes the TREND break-of-structure rule can use
 
 DEFAULTS = {
-    "trend": dict(auto=True, max_risk_pct=0.0, max_sl=20.0, min_pct=100.0, rr=2.0, sl_atr=1.5, sl_mode="swing", swing_buf=0.1, swing_min=0.5, swing_max=4.0, adx_min=22.0, cooldown=8,
+    "trend": dict(route=False, route_hi=55.0, route_lo=35.0, cmi_trend=45.0, mmi_lb=5, auto=True, max_risk_pct=0.0, max_sl=20.0, min_pct=100.0, rr=5.0, sl_atr=1.5, sl_mode="swing", swing_buf=0.1, swing_min=0.5, swing_max=4.0, adx_min=22.0, cooldown=8,
                   bos_ltf="M15", bos_htf="H4", bos_m15_min=2, bos_window=32, h4_window=12,
                   rsi_hi=70.0, rsi_lo=30.0, ob_tf="M15", ob_block_atr=1.5, of_bars=3, of_min=15.0,
                   m5_window=32, cvd_mode="slope8", cvd_bars=8),
-    "pullback": dict(auto=True, any_dir=True, spike_atr=3.0, max_risk_pct=0.0, max_sl=20.0, min_pct=100.0, rr=2.0, sl_atr=1.2, os=40.0, ob=60.0, block_volatile=False,
+    "pullback": dict(route=False, route_hi=55.0, route_lo=35.0, mmi_rev=66.0, cmi_rev=70.0, mmi_lb=5, auto=True, any_dir=True, spike_atr=3.0, max_risk_pct=0.0, max_sl=20.0, min_pct=100.0, rr=5.0, sl_atr=1.2, os=40.0, ob=60.0, block_volatile=False,
                      vol_pct=85.0, cooldown=6, mfi_os=20.0, mfi_ob=80.0, doji_body=0.15, ob_near=0.3, ob_tf="M15", of_min=10.0),
-    "conso": dict(auto=False, no_expiry=True, max_risk_pct=0.0, min_pct=100.0, of_bars=5, of_min=15.0, rr=2.0, buffer=0.5, max_sl=8.0, expiry_bars=8, adx_max=20.0, quiet_bars=1,
-                  vol_pct=35.0, range_bars=12, levels=2, step=1.5,
+    "conso": dict(route=False, route_hi=55.0, route_lo=35.0, cmi_chop=40.0, mmi_lb=5, auto=False, no_expiry=True, max_risk_pct=0.0, min_pct=100.0, of_bars=5, of_min=15.0, rr=5.0, buffer=0.5, max_sl=20.0, expiry_bars=8, adx_max=20.0, quiet_bars=1,
+                  vol_pct=35.0, range_bars=12, levels=1, step=1.5,
                   lookback=48, swing=2, min_touches=2, tol_pips=5.0, pip=0.10, min_bars=8, max_range=10.0,
                   min_range=0.5),
 }
@@ -116,52 +119,93 @@ PROFILES = {
         title="MASTER", auto_tf="M15", htf_filter=False,
         autotrade=dict(master_mode=True, max_open=3, max_per_day=0, no_opposite=False, reversal=True,
                        trend_early_exit="m15_2bos", trend_reentry_win=30, trend_secure_r=1.0, trend_secure_pct=50.0,
-                       conso_protect=False),
-        protect=dict(be_r=1.0, be_offset=0.20, profit_lock=[[1.5, 0.5], [1.8, 1.0]]),
-        desc="Pareho ng MT5 Master EA v1.90 (CVD): TREND H4 + 2 M15 BOS + M5 structure + CVD, SL sa swing 1:2; "
+                       conso_protect=True, mode_mult=1.0, tl_max_sl=20.0, tl_rr=5.0),
+        # v2.8.34: TP 1:5; exits by the 0.5R ladder (BE +0.5R, then every +0.5R one step behind) and the reversal
+        protect=dict(be_r=0.5, be_offset=0.20, profit_lock=[], trail_mode="step", step_r=0.5, trail_start_r=0.5,
+                     tp_scale=False),
+        desc="Pareho ng MT5 Master EA v1.90 (CVD): TREND H4 + 2 M15 BOS + M5 structure + CVD, SL sa swing, TP 1:5 + trailing; "
              "PULLBACK RSI 30/70 + OB; CONSO ADX<20 grid. Bawat strategy may sariling trade + reversal close.",
-        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=2, bos_window=32, h4_window=12, rr=2.0, sl_atr=1.5, sl_mode="swing",
-                   cooldown=8, rsi_hi=70.0, rsi_lo=30.0, m5_window=32, cvd_mode="slope8", cvd_bars=8,
-                   conditions=["bos_m15", "bos_h4", "not_extreme", "m5_struct", "cvd"]),
-        pullback=dict(os=30.0, ob=70.0, mfi_os=20.0, mfi_ob=80.0, rr=2.0, sl_atr=1.2, cooldown=6, vol_pct=85.0,
-                      ob_near=0.3, conditions=["rsi", "ob_spike"]),
-        conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=2.0, levels=2, step=1.5, buffer=0.5, expiry_bars=8,
-                   max_sl=8.0, range_bars=12, max_range=0.0, conditions=["adx_low"])),
-    "normal": dict(
-        title="NORMAL", auto_tf="M15", htf_filter=True,
-        protect=dict(be_r=1.0, be_offset=0.20, profit_lock=[[1.5, 0.5], [1.8, 1.0]]),   # TP 1:2
-        desc="M15 entry / sariwang H4 trend (12 bars), TREND 1:2 SL sa huling swing + hindi overbought/oversold, PULLBACK RSI + OB 1:2.",
-        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=2, bos_window=32, h4_window=12, rr=2.0, sl_atr=1.5, sl_mode="swing",
-                   cooldown=8, conditions=["bos_m15", "bos_h4", "of_buyers", "not_extreme"]),
-        pullback=dict(os=40.0, ob=60.0, mfi_os=20.0, mfi_ob=80.0, rr=2.0, sl_atr=1.2, cooldown=6,
-                      conditions=["rsi", "ob", "of_turn"]),
-        conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=2.0, levels=2, step=1.5, expiry_bars=8, max_sl=8.0, range_bars=12,
-                   max_range=0.0, conditions=["adx_low", "of_balanced"])),
+        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=2, bos_window=32, h4_window=12, rr=5.0, sl_atr=1.5, sl_mode="swing",
+                   cooldown=8, rsi_hi=70.0, rsi_lo=30.0, m5_window=32, cvd_mode="slope8", cvd_bars=8, max_sl=20.0,
+                   conditions=["bos_m15", "bos_h4", "not_extreme", "m5_struct", "cvd", "mmi_cmi"]),
+        pullback=dict(os=30.0, ob=70.0, mfi_os=20.0, mfi_ob=80.0, rr=5.0, sl_atr=1.2, cooldown=6, vol_pct=85.0,
+                      ob_near=0.3, max_sl=20.0, spike_atr=3.0, conditions=["rsi", "ob_spike", "mmi_cmi"]),
+        conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=5.0, levels=1, step=1.5, buffer=0.5, expiry_bars=8,
+                   max_sl=20.0, range_bars=12, max_range=0.0, conditions=["adx_low", "mmi_cmi"])),
+    # v2.8.38 (Eugene: "ayusin mo ang 3 mode ... sa scalp at aggressive ikaw na bahala, mas malaking lot pag aggressive"):
+    # the same SC logic as NORMAL (PULLBACK OB or spike both sides, CONSO pairs, 0.5R ladder, reversal on entry), tuned.
     "aggressive": dict(
         title="AGGRESSIVE", auto_tf="M15", htf_filter=False,
-        protect=dict(be_r=1.0, be_offset=0.20, profit_lock=[[1.25, 0.5]]),                # TP 1:1.5
-        desc="Mas maluwag: 1 BOS sa M15 + H4 BOS, pullback walang doji, 1:1.5. Mas maraming trade.",
-        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=1, bos_window=32, h4_window=30, rr=1.5, sl_atr=1.2, sl_mode="atr",
-                   cooldown=4, conditions=["bos_m15", "bos_h4", "of_buyers"]),
-        pullback=dict(os=45.0, ob=55.0, mfi_os=30.0, mfi_ob=70.0, rr=1.5, sl_atr=1.2, cooldown=4,
-                      conditions=["rsi", "mfi", "ob", "of_turn"]),
-        conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=1.5, levels=2, step=1.0, expiry_bars=8, max_sl=8.0, range_bars=12,
-                   max_range=0.0, conditions=["adx_low", "of_balanced"])),
+        autotrade=dict(master_mode=True, max_open=4, max_per_day=0, no_opposite=False, reversal=True,
+                       trend_early_exit="m15_2bos", trend_reentry_win=30, trend_secure_r=1.0, trend_secure_pct=50.0,
+                       conso_protect=True, mode_mult=2.0, tl_max_sl=20.0, tl_rr=3.0),
+        protect=dict(be_r=0.5, be_offset=0.20, profit_lock=[], trail_mode="step", step_r=0.5, trail_start_r=0.5,
+                     tp_scale=False),
+        desc="Mas maluwag at x2 lot (TREND / PULLBACK / TL BREAK): 1 BOS sa M15 + H4 BOS, PULLBACK RSI 35/65 + (OB o "
+             "spike) BUY at SELL, CONSO ADX<22. TP 1:3, BE sa +0.5R at trailing bawat 0.5R. Mas maraming trade.",
+        trend=dict(bos_ltf="M15", bos_htf="H4", bos_m15_min=1, bos_window=32, h4_window=30, rr=3.0, sl_atr=1.2,
+                   sl_mode="swing", cooldown=4, max_sl=20.0, cmi_trend=35.0, conditions=["bos_m15", "bos_h4", "not_extreme", "mmi_cmi"]),
+        pullback=dict(os=35.0, ob=65.0, mfi_os=25.0, mfi_ob=75.0, rr=3.0, sl_atr=1.2, cooldown=4, vol_pct=85.0,
+                      ob_near=0.3, max_sl=20.0, spike_atr=2.5, mmi_rev=60.0, cmi_rev=75.0, conditions=["rsi", "ob_spike", "mmi_cmi"]),
+        conso=dict(quiet_bars=1, adx_max=22.0, cmi_chop=45.0, vol_pct=35.0, rr=3.0, levels=2, step=1.0, buffer=0.5, expiry_bars=8,
+                   max_sl=20.0, range_bars=12, max_range=0.0, conditions=["adx_low", "mmi_cmi"])),
     "scalp": dict(
         title="SCALP", auto_tf="M5", htf_filter=False,
-        protect=dict(be_r=0.6, be_offset=0.10, profit_lock=[[0.8, 0.3]]),                 # TP 1:1: before the TP
-        desc="Mabilis: M5 entry (2 BOS sa M5 + 1 BOS sa H1), maliit na SL, 1:1, maikling expiry.",
-        trend=dict(bos_ltf="M5", bos_htf="H1", bos_m15_min=2, bos_window=36, h4_window=24, rr=1.0, sl_atr=1.0, sl_mode="atr",
-                   cooldown=4, conditions=["bos_m15", "bos_h4", "of_buyers"]),
-        pullback=dict(os=35.0, ob=65.0, mfi_os=20.0, mfi_ob=80.0, rr=1.0, sl_atr=1.0, cooldown=3, conditions=_P4),
-        conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=1.0, levels=1, step=1.0, expiry_bars=6, max_sl=4.0, range_bars=12,
-                   max_range=0.0, conditions=["adx_low", "of_balanced"])),
+        autotrade=dict(master_mode=True, max_open=3, max_per_day=0, no_opposite=False, reversal=True,
+                       trend_early_exit="m15_2bos", trend_reentry_win=30, trend_secure_r=1.0, trend_secure_pct=50.0,
+                       conso_protect=True, mode_mult=1.0, tl_max_sl=15.0, tl_rr=3.0),
+        protect=dict(be_r=0.5, be_offset=0.10, profit_lock=[], trail_mode="step", step_r=0.5, trail_start_r=0.5,
+                     tp_scale=False),
+        desc="Mabilis: M5 entry (2 BOS sa M5 + BOS sa H1), SL max $15 (150 pips), pati CONSO, PULLBACK RSI 30/70 + (OB o "
+             "spike) BUY at SELL. TP 1:3, BE sa +0.5R at trailing bawat 0.5R. Maikli ang trade.",
+        trend=dict(bos_ltf="M5", bos_htf="H1", bos_m15_min=2, bos_window=36, h4_window=24, rr=3.0, sl_atr=1.0,
+                   sl_mode="swing", cooldown=4, max_sl=15.0, conditions=["bos_m15", "bos_h4", "not_extreme", "mmi_cmi"]),
+        pullback=dict(os=30.0, ob=70.0, mfi_os=20.0, mfi_ob=80.0, rr=3.0, sl_atr=1.0, cooldown=3, vol_pct=85.0,
+                      ob_near=0.3, max_sl=15.0, spike_atr=3.0, conditions=["rsi", "ob_spike", "mmi_cmi"]),
+        conso=dict(quiet_bars=1, adx_max=20.0, vol_pct=35.0, rr=3.0, levels=1, step=1.0, buffer=0.3, expiry_bars=6,
+                   max_sl=15.0, range_bars=12, max_range=0.0, conditions=["adx_low", "mmi_cmi"])),
 }
+
+
+# v2.8.37 (Eugene: "dapat ang mode natin ay SCALP, NORMAL at AGGRESSIVE lang"; "normal setup"): NORMAL = the SC setup
+# that was built on the MASTER profile (TREND / PULLBACK any side, OB or spike / CONSO, 1:5, 0.5R ladder, CONSO protected,
+# each strategy its own trade + reversal). "master" stays only as an alias of NORMAL (old saved settings / links).
+PROFILES["normal"] = json.loads(json.dumps(PROFILES["master"]))
+PROFILES["normal"].update(
+    title="NORMAL",
+    desc="SC setup: M15 entry. TREND H4 + 2 M15 BOS + M5 structure + CVD, SL sa swing (max $20); PULLBACK RSI 30/70 + "
+         "(OB o spike) BUY at SELL kahit kontra HTF; CONSO ADX<20 BUY/SELL STOP pares. TP 1:5, BE sa +0.5R at trailing "
+         "bawat 0.5R; bawat strategy may sariling trade + reversal kapag may entry.")
+# v2.8.49 (Eugene: "ok pa ang trade natin hanggang Oct 7, Oct 8 dun na" -> "ibalik sa dati"): what REALLY ran until Oct 7.
+# The zips up to v2.8.43 carried an old strategy_settings.json, so the VPS ran THESE values (HTF filter ON, order flow
+# REQUIRED, PULLBACK RSI 40/60, CONSO box max $10), not the NORMAL profile. On Oct 8 (v2.8.44 without that file +
+# NORMAL pressed, v2.8.45 order flow info-only + CMI router) they were lost. NORMAL = this setup again.
+OCT7 = dict(
+    htf_filter=True,
+    trend=dict(rr=5.0, max_sl=20.0, sl_mode="swing", sl_atr=1.5, cooldown=8, bos_ltf="M15", bos_htf="H4", bos_m15_min=2,
+               bos_window=32, h4_window=12, rsi_hi=70.0, rsi_lo=30.0, of_bars=3, of_min=15.0, route=False,
+               conditions=["bos_m15", "bos_h4", "of_buyers", "not_extreme", "mmi_cmi"]),
+    pullback=dict(rr=5.0, max_sl=20.0, os=40.0, ob=60.0, any_dir=True, block_volatile=False, spike_atr=3.0, cooldown=6,
+                  of_min=10.0, route=False, conditions=["rsi", "ob_spike", "of_turn", "mmi_cmi"]),
+    conso=dict(rr=5.0, max_sl=20.0, levels=1, step=1.5, max_range=10.0, adx_max=20.0, quiet_bars=1, of_bars=5, of_min=15.0,
+               route=False, conditions=["adx_low", "of_balanced", "mmi_cmi"]))
+for _n in NAMES:
+    PROFILES["normal"][_n].update(json.loads(json.dumps(OCT7[_n])))
+PROFILES["normal"]["htf_filter"] = True
+PROFILES["normal"]["desc"] = ("Ang setup na tumakbo hanggang Oct 7: HTF filter ON, ORDER FLOW required sa lahat. TREND H4 + 2 M15 BOS "
+                              "+ order flow + hindi overbought/oversold; PULLBACK RSI 40/60 + (OB o spike) + order flow; CONSO "
+                              "ADX<20 + order flow balanse, box max $10. TP 1:5, BE +0.5R, trailing bawat 0.5R.")
+PROFILES["master"] = json.loads(json.dumps(PROFILES["normal"]))
+for _p in ("aggressive", "scalp"):
+    for _n in NAMES:
+        PROFILES[_p][_n]["route"] = False                     # v2.8.49: no CMI router (it was not there until Oct 7)
+PROFILE_BUTTONS = ("scalp", "normal", "aggressive")       # what the UI shows (MASTER hidden: it is NORMAL now)
 
 
 def apply_profile(cur, name):
     """cur settings + the profile -> new settings (AUTO flags kept). The profile's conditions are exactly the
     checked (and required) ones."""
+    name = "normal" if name == "master" else name
     p = PROFILES[name]
     out = json.loads(json.dumps(cur))
     for n in NAMES:
@@ -240,6 +284,23 @@ def clean_settings(raw):
             cur["auto"] = True                                   # v2.8.3 (Eugene): CONSO laging AUTO
         if old_schema < 13 and n == "conso":
             cur["max_risk_pct"] = 0.0                            # v2.8.14 (Eugene): walang risk-per-trade sa CONSO
+        if old_schema < 21:
+            # v2.8.43 (Eugene: "isama mo sa lahat ng strategy"): MMI / CMI regime check, ON + required, once
+            cur.setdefault("conditions", {})["mmi_cmi"] = True
+            req = list(cur.get("required") or [])
+            if "mmi_cmi" not in req:
+                cur["required"] = req + ["mmi_cmi"]
+        if old_schema < 20 and n == "conso" and (raw or {}).get("profile", "normal") in ("normal", "master") \
+                and int(new.get("levels", 2) or 2) == 2:
+            # v2.8.42 (Eugene): NORMAL = 1 BUY STOP + 1 SELL STOP; AGGRESSIVE = 2 + 2
+            cur["levels"] = 1
+        if old_schema < 19 and n == "conso":
+            # v2.8.41 (Eugene: "isabay sa SL nila ang conso"): the CONSO max SL = the TREND / PULLBACK max SL
+            cur["max_sl"] = float((((raw or {}).get("trend") or {}).get("max_sl")) or 20.0)
+        if old_schema < 17:
+            # v2.8.34 (Eugene: "pwede tayo mag 1:5RR, may trailing naman tayo, tapos may pullback na mag-autoclose"):
+            # TP at 5R for TREND / PULLBACK / CONSO; the 0.5R trailing ladder and the reversal take the exits
+            cur["rr"] = 5.0
         if old_schema < 16 and n in ("trend", "pullback"):
             # v2.8.23 (Eugene: "max tayo sa SL na $20 or 200 pips"): no % risk block for TREND / PULLBACK; the stop is
             # capped at a $20 price distance (200 gold pips) instead
@@ -256,6 +317,29 @@ def clean_settings(raw):
             cur["any_dir"], cur["block_volatile"] = True, False
         if old_schema < 6 and OF_KEY[n] not in cur["required"]:
             cur["required"].append(OF_KEY[n])                    # v2.7.1: order flow ON in every strategy
+        if old_schema < 22:                                      # after every older step
+            # v2.8.45 (Eugene, audit): order flow is info only (no tick history -> live and history judged the same)
+            ofk = OF_KEY[n]
+            cur.setdefault("conditions", {})[ofk] = False
+            cur["required"] = [k for k in (cur.get("required") or []) if k != ofk]
+        if old_schema < 26:                                      # after every older step
+            prof = (raw or {}).get("profile", "normal")
+            if prof in ("normal", "master"):
+                # v2.8.49: back to what ran until Oct 7 (OCT7), once. AUTO flags stay.
+                o = OCT7[n]
+                for k, v in o.items():
+                    if k != "conditions":
+                        cur[k] = v
+                cur["conditions"] = {k: k in o["conditions"] for k, _, _ in CATALOG[n]}
+                cur["required"] = list(o["conditions"])
+            else:
+                cur["route"] = False
+                ofk = OF_KEY[n]
+                cur["conditions"][ofk] = True
+                if ofk not in cur["required"]:
+                    cur["required"].append(ofk)
+        known = {k for k, _, _ in CATALOG[n]}
+        cur["required"] = [k for k in cur["required"] if k in known]
         for k in cur["required"]:
             cur["conditions"][k] = True                          # a required condition is always ON
         cur["min_pct"] = 100.0                                    # every checked condition must be met
@@ -273,7 +357,11 @@ def clean_settings(raw):
             cur["bos_m15_min"] = max(1, min(5, int(cur["bos_m15_min"])))
     raw = raw or {}
     s["profile"] = raw.get("profile") if raw.get("profile") in list(PROFILES) + ["custom"] else "normal"
+    if s["profile"] == "master":
+        s["profile"] = "normal"                    # v2.8.37: MASTER is called NORMAL now (same settings)
     s["htf_filter"] = bool(raw.get("htf_filter", True))
+    if raw and int(raw.get("schema", 1) or 1) < 26 and s["profile"] == "normal":
+        s["htf_filter"] = True                     # v2.8.49: the Oct 7 setup had the HTF filter ON
     s["schema"] = SCHEMA
     return s
 
@@ -507,6 +595,20 @@ def series(bars, mtf=None):
         bbu[i], bbl[i] = m + 2 * sd, m - 2 * sd
     S["bb_up"], S["bb_lo"] = bbu, bbl
     S["ema200"] = _ema(c, 200)
+    # v2.8.43 MMI (Market Meanness Index, 100 bars, lightly smoothed) and CMI (Choppy Market Index, 14 bars)
+    mp, raw_mmi = 100, [None] * n
+    for i in range(mp, n):
+        w = c[i - mp:i + 1]
+        med = sorted(w)[len(w) // 2]
+        # Lotter: a value above the median followed by a lower one (or below / higher) = "mean" (reverting) move
+        hit = sum(1 for k in range(1, len(w)) if (w[k - 1] > med and w[k] < w[k - 1]) or (w[k - 1] < med and w[k] > w[k - 1]))
+        raw_mmi[i] = 100.0 * hit / (len(w) - 1)
+    S["mmi"] = [None if i < mp + 4 or None in raw_mmi[i - 4:i + 1] else sum(raw_mmi[i - 4:i + 1]) / 5 for i in range(n)]
+    cm = [None] * n
+    for i in range(14, n):
+        hh, ll = max(h[i - 14:i + 1]), min(lo[i - 14:i + 1])
+        cm[i] = 0.0 if hh == ll else 100.0 * abs(c[i] - c[i - 14]) / (hh - ll)
+    S["cmi"] = cm
     # Supertrend (10, 3)
     atr10 = _rma(tr, 10)
     st_dir, fu, fl = [0] * n, None, None
@@ -613,6 +715,23 @@ def trend_dir(S, i, bias=0, strict=True):
     return 1 if e20 > e50 and c > e50 else -1 if e20 < e50 and c < e50 else 0
 
 
+def mmi_cmi(S, i, kind, cfg):
+    """v2.8.43 MMI / CMI regime check. Missing data (warm-up) passes, so it never blocks a young chart.
+    trend: CMI >= cmi_trend OR MMI falling over mmi_lb bars.   rev (pullback): MMI >= mmi_rev OR CMI <= cmi_rev.
+    chop (conso): CMI <= cmi_chop AND MMI not falling."""
+    mm, cm = S.get("mmi"), S.get("cmi")
+    if not mm or not cm or i >= len(mm) or mm[i] is None or cm[i] is None:
+        return True
+    lb = int(cfg.get("mmi_lb", 5))
+    prev = mm[i - lb] if i - lb >= 0 else None
+    falling = prev is not None and mm[i] < prev - 0.5
+    if kind == "trend":
+        return cm[i] >= cfg.get("cmi_trend", 45.0) or falling
+    if kind == "rev":
+        return mm[i] >= cfg.get("mmi_rev", 66.0) or cm[i] <= cfg.get("cmi_rev", 70.0)
+    return cm[i] <= cfg.get("cmi_chop", 40.0) and not falling
+
+
 def _checks(name, S, i, d, cfg, bars, bias):
     c = S["c"][i]
     a = S["atr"][i] or 1.0
@@ -636,6 +755,7 @@ def _checks(name, S, i, d, cfg, bars, bias):
         out["ema200"] = e200 is not None and (c - e200) * d > 0
         pr, _k = of_pressure(S, i, int(cfg.get("of_bars", 3)))
         out["of_buyers"] = pr is None or pr * d >= cfg.get("of_min", 15.0)       # no tick data: not judged
+        out["mmi_cmi"] = mmi_cmi(S, i, "trend", cfg)
         out["not_extreme"] = r_ is not None and (r_ < cfg.get("rsi_hi", 70) if d == 1 else r_ > cfg.get("rsi_lo", 30))
         out["no_ob_block"] = ob_block(S, bars, i, d, cfg) is None
         m15 = mtf_state(S, i, cfg.get("bos_ltf", "M15"), cfg.get("bos_window", 32))
@@ -703,6 +823,7 @@ def _checks(name, S, i, d, cfg, bars, bias):
                 return b.c > b.o and pb.c < pb.o and b.c >= pb.o and b.o <= pb.c
             return b.c < b.o and pb.c > pb.o and b.c <= pb.o and b.o >= pb.c
         out["engulf"] = _eng(i) or _eng(i - 1)
+        out["mmi_cmi"] = mmi_cmi(S, i, "rev", cfg)
     return out
 
 
@@ -713,7 +834,32 @@ def _score(name, cfg, met):
     return 100.0 * sum(1 for k in on if met.get(k)) / len(on), on
 
 
+def route_zone(S, i, cfg):
+    """v2.8.45 CMI ROUTER (Eugene): ONE strategy per market condition. CMI >= route_hi -> TREND, CMI <= route_lo ->
+    CONSO, in between -> PULLBACK. None while CMI is warming up (then every strategy may trade, as before)."""
+    cm = S.get("cmi")
+    if not cm or i >= len(cm) or cm[i] is None:
+        return None
+    if cm[i] >= cfg.get("route_hi", 55.0):
+        return "trend"
+    if cm[i] <= cfg.get("route_lo", 35.0):
+        return "conso"
+    return "pullback"
+
+
 def evaluate(name, bars, S, i, cfg, bias=0, box=None):
+    e = _evaluate(name, bars, S, i, cfg, bias, box)
+    if e.get("ok") and cfg.get("route", True):
+        z = route_zone(S, i, cfg)
+        if z is not None and z != name:
+            cm = S["cmi"][i]
+            e = dict(e, ok=False, missing=list(e.get("missing") or []) + ["route"], routed_to=z,
+                     why=f"CMI router: CMI {cm:.0f} → {TITLE[z]} ang may hawak (TREND ≥ {cfg.get('route_hi', 55.0):g}, "
+                         f"CONSO ≤ {cfg.get('route_lo', 35.0):g}, PULLBACK sa gitna)")
+    return e
+
+
+def _evaluate(name, bars, S, i, cfg, bias=0, box=None):
     """One strategy on CLOSED bar i -> dict(ok, side, score, met{}, on[], missing_required[], why, plan...)."""
     if i < 60 or i >= len(bars):
         return dict(ok=False, side=0, score=0.0, met={}, on=[], missing=["data"], why="hindi pa sapat ang bars")
@@ -922,6 +1068,7 @@ def _eval_conso(bars, S, i, cfg, box=None):
     met["of_balanced"] = pr is None or abs(pr) < cfg.get("of_min", 15.0)
     rr_ = S["rsi"][i]
     met["rsi_mid"] = rr_ is not None and 40 <= rr_ <= 60
+    met["mmi_cmi"] = mmi_cmi(S, i, "chop", cfg)
     met["inside_bb"] = all(S["bb_up"][k] is not None and S["bb_lo"][k] <= bars[k].c <= S["bb_up"][k]
                            for k in range(max(0, i - max(1, int(cfg.get("quiet_bars", 1))) + 1), i + 1))
     vp = _rank(S["vol"], i)
@@ -1034,7 +1181,7 @@ def status(hub, tf=None, cfg=None):
                titles=TITLE, strategies={},
                profiles={k: dict(title=v["title"], desc=v["desc"], auto_tf=v["auto_tf"], htf_filter=v["htf_filter"],
                                  protect=v["protect"])
-                         for k, v in PROFILES.items()})
+                         for k, v in PROFILES.items() if k in PROFILE_BUTTONS})
     if len(bars) < 80:
         out["error"] = "hindi pa sapat ang bars"
         return out

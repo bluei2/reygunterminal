@@ -70,7 +70,11 @@ DEFAULTS = dict(
                                    # (also in opposite directions); a strategy never opens a 2nd trade of its own
     reversal=True,                 # a fresh TREND signal closes the older trades AGAINST it (and the CONSO stop
     pullback_reversal=True,
-    align_mult=2.0,                # v2.8.22 (Eugene): TREND / PULLBACK lot x2 when H4 + H1 + M15 all agree (1 = off)
+    tl_auto=True,                  # v2.8.27 (Eugene): TL BREAK strategy - trend line breakout (close) + re-entry on retest
+    align_mult=2.0,
+    mode_mult=1.0,                 # v2.8.38: the mode's lot multiplier (AGGRESSIVE x2); the larger of this and align wins
+    tl_max_sl=20.0,                # TL BREAK max SL ($) - SCALP 8
+    tl_rr=5.0,                     # TL BREAK RR - AGGRESSIVE / SCALP 3                # v2.8.22 (Eugene): TREND / PULLBACK lot x2 when H4 + H1 + M15 all agree (1 = off)
     rev_cancel_conso=False,        # v2.8.19: a reversal does NOT cancel one side of a pending CONSO grid (keep the pair)        # v2.8.15: a fresh PULLBACK signal reverses too (closes the trades against it)
     rev_close=["trend", "pullback", "conso"],   # orders on that side) of these strategies
     trend_early_exit="m15_2bos",   # off | m15_bos | m15_2bos: close a TREND trade before its TP when the entry-TF
@@ -80,7 +84,11 @@ DEFAULTS = dict(
                                    # H4 break is up to N H4 bars old (normally h4_window = 12). 0 = off
     trend_secure_r=1.0,            # TREND: close trend_secure_pct % at +R (then break-even). 0 = off.
     trend_secure_pct=50.0,         #   0.01 lot cannot be split: the trade then simply stays whole
-    conso_protect=False,           # CONSO trades: break-even / profit lock of the position manager (EA: off)
+    conso_protect=True,            # CONSO trades: break-even / profit lock / trailing of the position manager (v2.8.28 ON)
+    # v2.8.48 (Eugene, range 4113-4133: the CONSO SELL STOP and BUY STOP both filled at the edges and lost ~$20 each)
+    conso_fail_exit=True,          # a filled CONSO trade is closed when an AUTO-TF candle CLOSES back inside the box
+    conso_fail_atr=0.2,            #   ... by at least this x ATR (a failed breakout: cut it small, not at the full SL)
+    conso_one_loss=True,           # after a CONSO trade of a box LOSES, no new grid on that box (wait for a new box)
 )
 EXIT_MODES = ("off", "m15_bos", "m15_2bos")
 import market_hours  # noqa: E402
@@ -88,7 +96,7 @@ import market_hours  # noqa: E402
 SESSION_HOURS = market_hours.SESSIONS          # UTC, shared table (market_hours.SESSIONS / session_settings.json)
 
 
-SETTINGS_VERSION = 4       # v2: auto_on_start ON by default; v3: Asia + Frankfurt added to the sessions (once)
+SETTINGS_VERSION = 5       # v2: auto_on_start ON by default; v3: Asia + Frankfurt added to the sessions (once)
                            # v4 (v2.8.0): MASTER once - M15, max 3 open, unlimited per day, no_opposite off
 
 
@@ -107,6 +115,10 @@ def load_settings():
             # (a reversal closes the older side), so the old "no opposite" rule is switched off.
             raw.update(tf="M15", max_open=3, max_per_day=0, no_opposite=False, master_mode=True)
             s["_migrate_master"] = True
+        if ver < 5:
+            # v2.8.28 (Eugene: CONSO 4170 -> 4180+ then back to SL): the CONSO trades also get the position manager
+            # (break-even / profit lock / trailing), once
+            raw["conso_protect"] = True
         for k, v in raw.items():
             if k in s:
                 s[k] = v
@@ -176,7 +188,7 @@ class AutoTrader:
 
     def update_settings(self, new):
         s = self.settings
-        for k in ("lot", "min_score", "max_spread", "align_mult"):
+        for k in ("lot", "min_score", "max_spread", "align_mult", "mode_mult", "tl_max_sl", "tl_rr"):
             if k in new:
                 try:
                     s[k] = max(0.0, float(new[k]))
@@ -239,7 +251,8 @@ class AutoTrader:
                 s["reentry_minutes"] = max(0, int(float(new["reentry_minutes"])))
             except (TypeError, ValueError):
                 pass
-        for k in ("master_mode", "reversal", "conso_protect", "pullback_reversal", "rev_cancel_conso"):
+        for k in ("master_mode", "reversal", "conso_protect", "pullback_reversal", "rev_cancel_conso", "tl_auto",
+                  "conso_fail_exit", "conso_one_loss"):
             if k in new:
                 s[k] = bool(new[k])
         if isinstance(new.get("rev_close"), list):
@@ -247,7 +260,8 @@ class AutoTrader:
         for k in ("trend_early_exit", "conso_early_exit"):
             if new.get(k) in EXIT_MODES:
                 s[k] = new[k]
-        for k, lo, hi in (("trend_reentry_win", 0, 200), ("trend_secure_r", 0.0, 10.0), ("trend_secure_pct", 0.0, 100.0)):
+        for k, lo, hi in (("trend_reentry_win", 0, 200), ("trend_secure_r", 0.0, 10.0), ("trend_secure_pct", 0.0, 100.0),
+                          ("conso_fail_atr", 0.0, 3.0)):
             if k in new:
                 try:
                     v = float(new[k])
@@ -285,6 +299,12 @@ class AutoTrader:
             p = next((x for x in self.hub.plugins if x.key == want.get(src)), None)
             if p is not None and not p.error:
                 out.append((src, p))
+        if self.settings.get("tl_auto", True):
+            # v2.8.27 TL BREAK: the Trend Line Breakout plugin as a strategy - "tl_break" enters on the CLOSE through
+            # the line, "tl_retest" re-enters when the broken line is retested and holds (each its own trade)
+            p = next((x for x in self.hub.plugins if x.key == want["trendline"]), None)
+            if p is not None and not p.error:
+                out += [("tl_break", p), ("tl_retest", p)]
         # the market-condition STRATEGIES switched to AUTO on the Trading page (strategies.py)
         try:
             import strategies as _st
@@ -316,6 +336,15 @@ class AutoTrader:
             return _st.signals(name, bars, cfg, bias_fn if name != "conso" else None, 60, S=S)
         with self.hub.lock:
             ctx = self.hub.ctx()
+            if src in ("tl_break", "tl_retest"):
+                old = p.obj.params
+                try:
+                    p.obj.params = dict(old, entry="break" if src == "tl_break" else "retest", confirmed_only=False,
+                                        max_sl=float(self.settings.get("tl_max_sl", 20.0)),
+                                        rr=float(self.settings.get("tl_rr", 5.0)), sl_mode="swing")
+                    return p.obj.signals(bars, ctx.utc_offset if ctx else 0) or []
+                finally:
+                    p.obj.params = old
             if src == "reversal":                  # AUTO TRADE's own R✓ / R? choice, not the chart setting
                 return p.obj.signals(bars, ctx.utc_offset if ctx else 0,
                                      confirmed_only=bool(self.settings.get("reversal_confirmed_only", True)))
@@ -394,6 +423,10 @@ class AutoTrader:
             self._early_exit(bars)                     # MASTER: the structure turned against an open trade
         except Exception as e:
             report("SIGNAL_ERROR", "autotrade", "EARLY_EXIT_FAILED", e)
+        try:
+            self._conso_fail_exit(bars)                # v2.8.48: a CONSO breakout that went back inside the box
+        except Exception as e:
+            report("SIGNAL_ERROR", "autotrade", "CONSO_FAIL_EXIT_FAILED", e)
         day = closed_t // 86400
         if day != self.today:
             self.today, self.count_today = day, 0
@@ -408,6 +441,9 @@ class AutoTrader:
                 if sg["t"] != closed_t:
                     continue                           # only the bar that just closed
                 self._consider(src, sg)
+                if src in ("tl_break", "tl_retest") and getattr(self, "_last_res", None) == "trade" \
+                        and s.get("master_mode", True) and s.get("pullback_reversal", True):
+                    self._reversal(sg["side"], key, who="TL BREAK")     # close the open trades AGAINST it
 
     def _strategies(self, bars, tf):
         """STRATEGIES set to AUTO: when EVERY checked condition is green on the last closed bar, trade it - once per
@@ -483,6 +519,10 @@ class AutoTrader:
                                 continue
                             if spell["t"] < getattr(self, "_conso_live_t", 0):
                                 continue               # an older box, superseded by a newer one: no new round
+                            if self.settings.get("conso_one_loss", True) and self._conso_box_lost(spell["t"]):
+                                self._note_once(key, "CONSO: natalo na ang isang trade ng box na ito → walang bagong grid "
+                                                     "hanggang may bagong box (range ito, hindi siksik)")
+                                continue
                             rnd += 1
                             rounds[key] = rnd
                             self._note("info", f"CONSO: tapos na ang dating grid, READY pa rin ang box → bagong BUY STOP / "
@@ -560,12 +600,12 @@ class AutoTrader:
         if key in done:
             return
         done.add(key)
-        srcs = {f"st_{n}" for n in s.get("rev_close", [])}
+        srcs = {f"st_{n}" for n in s.get("rev_close", [])} | {"tl_break", "tl_retest"}   # TL BREAK trades too
         hit = [g for g in list(tm.groups.values()) if getattr(g, "source", "") in srcs and g.side == -d]
         word = "UP" if d == 1 else "DOWN"
         for g in hit:
             r = tm.close_group(g.gid, 1.0, source=f"reversal: {who} {word}")
-            self._note("warn", f"REVERSAL {who} {word}: isinara ang {g.source[3:].upper()} "
+            self._note("warn", f"REVERSAL {who} {word}: isinara ang {g.source.split('_', 1)[1].upper()} "
                                f"{'BUY' if g.side == 1 else 'SELL'} {g.gid}" + ("" if r.get("ok") else f" (FAILED: {r})"),
                        decision="exit", side=g.side)
         n = 0
@@ -603,6 +643,45 @@ class AutoTrader:
             self._note("warn", f"EARLY EXIT {g.source[3:].upper()} {'BUY' if g.side == 1 else 'SELL'} {g.gid}: "
                                f"{'2nd ' if m == 'm15_2bos' else ''}{s['tf']} BOS {'UP' if b == 1 else 'DOWN'} kontra sa trade"
                        + ("" if r.get("ok") else f" (FAILED: {r.get('error')})"), decision="exit", side=g.side)
+
+    def _conso_fail_exit(self, bars):
+        """v2.8.48 FAILED BREAKOUT: a filled CONSO trade whose AUTO-TF candle (closed after the fill) CLOSES back inside
+        its box by >= conso_fail_atr x ATR is closed at once - in a range the stop orders fill at the edges and the price
+        turns back; this takes a small loss instead of the full stop on the other side of the box."""
+        s, tm = self.settings, self.tm
+        nt = getattr(self.hub, "newstrader", None)
+        if not s.get("conso_fail_exit", True) or nt is None or len(bars) < 20:
+            return
+        import exits
+        closed = bars[:-1]
+        sec = TF_SECONDS.get(s["tf"], 900)
+        c, t_close = closed[-1].c, closed[-1].t + sec
+        a = exits.atr(closed, 14)[-1] or 0.0
+        inside = float(s.get("conso_fail_atr", 0.2)) * a
+        for st in list(getattr(nt, "events", {}).values()):
+            box = st.get("box")
+            if st.get("kind") != "strategy" or not box:
+                continue
+            for k, gid in list((st.get("groups") or {}).items()):
+                g = tm.groups.get(gid) if isinstance(gid, str) else None
+                if g is None or getattr(g, "source", "") != "st_conso" or t_close <= (g.created or 0):
+                    continue
+                back = c < box["high"] - inside if g.side == 1 else c > box["low"] + inside
+                if not back:
+                    continue
+                r = tm.close_group(gid, 1.0, source="conso failed breakout")
+                self._note("warn", f"CONSO FAILED BREAKOUT {'BUY' if g.side == 1 else 'SELL'} {gid}: {s['tf']} close {c:.2f} "
+                                   f"bumalik sa loob ng box {box['low']:.2f}–{box['high']:.2f} → isinara (maliit na talo, "
+                                   f"hindi buong SL)" + ("" if r.get("ok") else f" (FAILED: {r.get('error')})"),
+                           decision="exit", side=g.side)
+
+    def _conso_box_lost(self, since_t):
+        """v2.8.48: a CONSO trade opened since this box became READY has closed with a loss."""
+        j = getattr(self.tm, "journal", None)
+        if j is None:
+            return False
+        return any(e.get("strategy") == "st_conso" and e.get("status") == "closed" and (e.get("pnl") or 0) < 0
+                   and (e.get("open_time") or 0) >= since_t for e in list(j.entries.values()))
 
     def _note_once(self, key, text):
         """Log a CONSO waiting note once per spell (the strategy is re-checked every minute)."""
@@ -705,7 +784,7 @@ class AutoTrader:
             return skip(why, "BLOCKED_SESSION")
         waive = ()
         route = None
-        strat = src.startswith("st_")
+        strat = src.startswith("st_") or src in ("tl_break", "tl_retest")   # TL BREAK behaves like a strategy
         if s.get("router") and not strat:          # strategies route themselves (their own market condition)
             route, why = self._route(src, side)
             if route is None:
@@ -720,7 +799,8 @@ class AutoTrader:
             # a CONSOLIDATION straddle has no direction: neither the HTF bias nor a structure conflict applies
             # v2.8.18 (Eugene: "kahit against sa htf"): PULLBACK in both directions ignores the HTF bias and the
             # structure conflict on every profile
-            pb_free = src == "st_pullback" and _st.load_settings().get("pullback", {}).get("any_dir", False)
+            pb_free = (src == "st_pullback" and _st.load_settings().get("pullback", {}).get("any_dir", False)) \
+                or src in ("tl_break", "tl_retest")    # a trend line break is often AGAINST the old trend
             waive = ("trigger", "score", "min_confidence") + (("htf:range",) if sg.get("pending") or own_dir or pb_free else ()) \
                 + (("htf:own",) if own_dir or sg.get("pending") or pb_free else ())
         if src == "reversal" and route and route["mode"] == "RANGE":
@@ -869,13 +949,17 @@ class AutoTrader:
                 self._note("error", f"AUTO CONSO BOX FAILED: {r.get('error')}", decision="error", code="EXECUTION_ERROR")
             return
         mult = self._align_mult(side) if strat else 1.0
+        if strat:                                 # the mode's lot (AGGRESSIVE x2) - never stacked with the align x2
+            mult = max(mult, float(s.get("mode_mult", 1.0) or 1.0))
         if mult != 1.0:
             lot = round(float(lot) * mult, 2)
-            tag += f" · ALIGN H4·H1·M15 x{mult:g}"
+            tag += f" · x{mult:g} lot"
         cap = None
         if src in ("st_trend", "st_pullback"):    # the strategy's own risk % (0 = off), x the aligned lot
             import strategies as _st
             cap = float(_st.load_settings().get(src[3:], {}).get("max_risk_pct", 0.0)) * mult
+        elif src in ("tl_break", "tl_retest"):
+            cap = 0.0                             # TL BREAK: no % block, its SL is capped at tl_max_sl ($20)
         r = tm.open(side, float(lot), sl_d, tp_d, kind="auto",
                     note=f"{src} signal, SL ${sl_d:.2f} TP ${tp_d:.2f}" + (f" · lot {', '.join(res['lot_notes'])}"
                                                                           if res["lot_notes"] else ""),

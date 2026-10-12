@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>REYGUN SuperChart v2.8.26</title>
+<title>REYGUN SuperChart v2.8.49</title>
 <link rel="icon" type="image/svg+xml" href="brand/mark.svg">
 <link rel="stylesheet" href="style.css">
 <script src="lightweight-charts.standalone.production.js"></script>
@@ -17,7 +17,7 @@
         <img src="brand/mark.svg" width="38" height="38" alt="">
       </div>
       <div><div class="b1">REYGUN</div><div class="b2">SUPERCHART</div>
-        <div class="ver-top"><span id="ver" class="ver-tag">v2.8.26</span> <span class="ver-build" id="verBuild">2026-10-05.26</span></div></div>
+        <div class="ver-top"><span id="ver" class="ver-tag">v2.8.49</span> <span class="ver-build" id="verBuild">2026-10-09.49</span></div></div>
     </div>
     <button class="side-toggle" id="btnSideToggle" title="Ipakita / itago ang pangalan ng menu">☰</button>
 
@@ -127,8 +127,8 @@
           <div class="tstrip" id="tStrip">
             <div class="ts-seg" id="tsMode"><button data-mode="manual">✋ MANUAL</button><button data-mode="auto">⚡ AUTO</button></div>
             <span class="ts-chip" id="tsArm" title="LIVE = totoong order · PAPER = simulated"></span>
-            <div class="ts-seg tsprof" id="tsProf"><button data-p="master" title="MASTER = parehong rules ng MT5 RG Master EA v1.90 (TREND + M5 + CVD, PULLBACK RSI 30/70 + OB, CONSO ADX&lt;20) · lahat AUTO · max 3 open">MASTER</button><button data-p="scalp">SCALP</button><button data-p="normal">NORMAL</button><button data-p="aggressive">AGGRESSIVE</button></div>
-            <div class="ts-seg tsstrat" id="tsStrat" title="Aling strategy ang papasukan ng AUTO"><span class="ts-lbl">AUTO:</span><button data-stauto="trend" data-lbl="TREND">○ TREND</button><button data-stauto="pullback" data-lbl="PULLBACK">○ PULLBACK</button><button data-stauto="conso" data-lbl="CONSO">○ CONSO</button></div>
+            <div class="ts-seg tsprof" id="tsProf"><button data-p="scalp" title="SCALP: M5, SL max $15 / 150 pips (pati CONSO), TP 1:3, BE +0.5R + trailing">SCALP</button><button data-p="normal" title="NORMAL = ang SC setup: TREND / PULLBACK (OB o spike, BUY at SELL) / CONSO / TL BREAK · TP 1:5 · BE +0.5R + trailing">NORMAL</button><button data-p="aggressive" title="AGGRESSIVE: M15, mas maluwag, x2 lot, TP 1:3, BE +0.5R + trailing">AGGRESSIVE</button></div>
+            <div class="ts-seg tsstrat" id="tsStrat" title="Aling strategy ang papasukan ng AUTO"><span class="ts-lbl">AUTO:</span><button data-stauto="trend" data-lbl="TREND">○ TREND</button><button data-stauto="pullback" data-lbl="PULLBACK">○ PULLBACK</button><button data-stauto="conso" data-lbl="CONSO">○ CONSO</button><button id="tsTL" title="TL BREAK: trend line breakout (close) + re-entry sa retest">○ TL BREAK</button></div>
             <button class="ts-chip pm" id="tsPm" title="Pag-secure ng profit (Position manager) · i-click para baguhin" hidden>🛡 --</button>
             <button class="ts-chip man" id="tsManual" title="Manual BUY / SELL (may confirm)">BUY / SELL ▾</button>
             <button class="ts-chip panelbtn" id="tsPanel" title="Ipakita / itago ang STRATEGIES panel sa kanan ng chart">◨ PANEL</button>

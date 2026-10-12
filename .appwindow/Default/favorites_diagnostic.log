@@ -150,3 +150,23 @@
 2026-10-06 11:39:38.660: [INFO] BookmarkModelLoaded, ids_reassigned: 0
 2026-10-06 11:39:38.660: [INFO] BookmarksLoadDropped droppedNodes=0
 2026-10-06 11:39:38.660: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-07 07:15:21.356: [INFO] BookmarksSnapshot Shutdown total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-08 08:41:27.706: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-08 08:41:27.706: [INFO] Profiles total count: 1
+2026-10-08 08:41:27.706: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-08T08:41:27.597Z
+2026-10-08 08:41:27.706: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-08 08:41:27.706: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-08T08:41:27.597Z
+2026-10-08 08:41:27.706: [INFO] OnDoneLoading sync enabled: 0
+2026-10-08 08:41:27.706: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-08 08:41:27.706: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-08 08:41:27.706: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-12 00:55:43.262: [INFO] CurrentProfilePath: C:\reygun_terminal\.appwindow\Default
+2026-10-12 00:55:43.262: [INFO] Profiles total count: 1
+2026-10-12 00:55:43.301: [INFO] Profile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-12T00:55:43.042Z
+2026-10-12 00:55:43.301: [INFO] LastUsedProfileDir: C:\reygun_terminal\.appwindow\Default
+2026-10-12 00:55:43.301: [INFO] MostRecentlyActiveProfile: name=Personal path=C:\reygun_terminal\.appwindow\Default lastActive=2026-10-12T00:55:43.042Z
+2026-10-12 00:55:43.301: [INFO] OnDoneLoading sync enabled: 0
+2026-10-12 00:55:43.301: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-10-12 00:55:43.301: [INFO] BookmarksLoadDropped droppedNodes=0
+2026-10-12 00:55:43.301: [INFO] BookmarksSnapshot Startup total=0 bar=0 other=0 mobile=0 showBar=0 showBarNTP=1
+2026-10-12 00:55:43.309: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0

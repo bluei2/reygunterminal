@@ -60,7 +60,9 @@ def parse_magics(text):
 
 
 DEFAULT_MASTER = dict(name="Master", path="", login=0, symbol="", paper_balance=10000.0, **DEFAULT_RISK)
-DEFAULT_FOLLOWER = dict(name="Follower", path="", login=0, symbol="", lot=0.01, enabled=True,
+DEFAULT_FOLLOWER = dict(name="Follower", path="", login=0, server="", password="", symbol="", lot=0.01, enabled=True,
+                        prop=False, prop_no_news=True, prop_no_x2=True, prop_news_pad=5, prop_close_news=True,
+                        prop_no_weekend=True, prop_fri_close=20.0,
                         paper_balance=10000.0, **DEFAULT_RISK)
 
 
@@ -91,7 +93,10 @@ def load_config() -> dict:
             cfg["master_preset"] = MASTER_PRESET
         done = int(raw.get("master_dd_pips", 0) or 0)
         m = cfg["master"]
-        if done < 1 or (done == 1 and m.get("dd_mode") == "pips" and float(m.get("daily_dd") or 0) == 200.0):
+        dd_v, dd_m = float(m.get("daily_dd") or 0), m.get("dd_mode")
+        preset = (dd_m == "$" and dd_v == MASTER_PRESET_RISK["daily_dd"]) or (dd_m == "pips" and dd_v == 200.0) or dd_v == 0
+        if done < 2 and preset:
+            # only the PRESET value ($20 from v2.8.0 / 200 pips from v2.8.25 / none) - your own limit is never touched
             # v2.8.26 (Eugene: "400 ang dd limit ntin ndi 200"): master daily DD = 400 pips, once
             # (also replaces the 200 pips set by v2.8.25; a value you chose yourself is kept)
             m.update(daily_dd=400.0, dd_mode="pips")
@@ -117,6 +122,32 @@ def clean_follower(fl: dict) -> dict:
     out["tp_mode"] = out["tp_mode"] if out["tp_mode"] in ("$", "pips") else "%"
     out["close_scope"] = "all" if out["close_scope"] == "all" else "superchart"
     out["enabled"] = bool(out["enabled"])
+    out["server"] = str(out.get("server") or "").strip()
+    out["password"] = str(out.get("password") or "")
+    out["prop"] = bool(out.get("prop"))                           # v2.8.30: PROP FIRM follower (rule-aware copy)
+    out["prop_no_news"] = bool(out.get("prop_no_news", True))
+    out["prop_no_x2"] = bool(out.get("prop_no_x2", True))
+    try:
+        out["prop_news_pad"] = max(0, min(120, int(out.get("prop_news_pad", 5))))
+    except (TypeError, ValueError):
+        out["prop_news_pad"] = 5
+    out["prop_close_news"] = bool(out.get("prop_close_news", True))
+    out["prop_no_weekend"] = bool(out.get("prop_no_weekend", True))
+    try:
+        out["prop_fri_close"] = max(0.0, min(23.5, float(out.get("prop_fri_close", 20.0))))
+    except (TypeError, ValueError):
+        out["prop_fri_close"] = 20.0
+    return out
+
+
+def public_config(cfg):
+    """v2.8.29: the config for the browser - passwords never leave the VPS (only whether one is saved)."""
+    out = dict(cfg)
+    out["followers"] = []
+    for f in cfg.get("followers") or []:
+        g = {k: v for k, v in f.items() if k != "password"}
+        g["has_password"] = bool(f.get("password"))
+        out["followers"].append(g)
     return out
 
 
@@ -519,7 +550,7 @@ class TradeManager:
         new = []
         for fc in self.cfg["followers"]:
             prev = old.pop(fc["id"], None)
-            same_conn = prev and prev.cfg.get("path") == fc.get("path") and prev.cfg.get("login") == fc.get("login")
+            same_conn = prev and all(prev.cfg.get(k) == fc.get(k) for k in ("path", "login", "server", "password"))
             if prev and same_conn:
                 prev.cfg = fc
                 prev.symbol = fc.get("symbol") or self.src.symbol
@@ -547,7 +578,8 @@ class TradeManager:
         a.status = "connecting"
         try:
             from account_worker import RemoteMT5
-            be = RemoteMT5(a.cfg["path"], a.cfg.get("login") or None)
+            be = RemoteMT5(a.cfg["path"], a.cfg.get("login") or None,
+                           password=a.cfg.get("password") or None, server=a.cfg.get("server") or None)
         except Exception as e:
             a.status, a.error = "error", f"{e.__class__.__name__}: {e}"
             return
@@ -613,6 +645,7 @@ class TradeManager:
                 self.refresh()
                 self.risk_check()
                 self.copy_manual()
+                self.prop_guard()
                 self.copy_audit()
                 self.sync()
                 self.protect()
@@ -841,7 +874,7 @@ class TradeManager:
                     continue
                 miss = []
                 for f in self.followers:
-                    if f.id in g.legs or not f.cfg.get("enabled"):
+                    if f.id in g.legs or not f.cfg.get("enabled") or (gid, f.id) in getattr(self, "_prop_closed", set()):
                         continue
                     why = self.follower_skip_reason(f)
                     miss.append(f"{f.name}: {why or 'walang order na pumasok (tingnan ang event log / MT5 Journal)'}")
@@ -879,7 +912,7 @@ class TradeManager:
         distance. From then on it is a normal group: SL / TP moves, partial closes and the close are mirrored.
         EA trades (magic != 0), other symbols and trades that were already open when the app started are not copied.
         Works WITHOUT arming trading (v2.7.4): whatever you do on the master, the followers do too.
-        The position manager leaves copied trades alone (your manual trade is yours)."""
+        v2.8.31: the position manager also manages them (break-even / lock / trailing; manage_manual)."""
         if not (self.cfg.get("copy_manual", True) or self.cfg.get("copy_ea", True)) or not self.master.connected \
                 or not self._fresh(self.master):
             return
@@ -1224,7 +1257,80 @@ class TradeManager:
             return "walang Fixed Lot (0)"
         if not self.paper and not f.info.get("trade_allowed", True):
             return "naka-OFF ang Algo Trading sa MT5 ng follower"
+        if f.cfg.get("prop"):
+            block, _ = self.prop_state(f)
+            if block:
+                return block
         return None
+
+    def prop_state(self, f, now=None):
+        """v2.8.30 PROP FIRM follower rules -> (block new trades: reason or None, close open trades: reason or None).
+        NEWS: no trade from prop_news_pad min before to prop_news_pad min after a high-impact news (the warn level of
+        the News page); its open trades are closed just before that window (prop_close_news). The MASTER and the
+        other followers still trade the news. WEEKEND: from Friday prop_fri_close (UTC) until Sunday 23:00 UTC no
+        new trades, and the open trades are closed at the Friday cut-off (no position over the weekend)."""
+        if not f.cfg.get("prop"):
+            return None, None
+        now = now or time.time()
+        if f.cfg.get("prop_no_weekend", True):
+            tm_ = time.gmtime(now)
+            h = tm_.tm_hour + tm_.tm_min / 60.0
+            wd = tm_.tm_wday                                  # Mon 0 .. Sun 6
+            if (wd == 4 and h >= float(f.cfg.get("prop_fri_close", 20.0))) or wd == 5 or (wd == 6 and h < 23.0):
+                why = f"PROP: weekend (Biyernes {float(f.cfg.get('prop_fri_close', 20.0)):g}:00 UTC hanggang Linggo 23:00 UTC)"
+                return why, why
+        if f.cfg.get("prop_no_news", True):
+            nf = getattr(self.hub, "news", None)
+            pad = int(f.cfg.get("prop_news_pad", 5)) * 60
+            if nf is not None:
+                st = getattr(nf, "settings", {}) or {}
+                cur, imp = set(st.get("currencies") or []), set(st.get("warn_impacts") or [])
+                try:
+                    with nf.lock:
+                        cal = [e for e in nf.calendar if e.get("currency") in cur and e.get("impact") in imp]
+                except Exception:
+                    cal = []
+                for e in cal:
+                    if -pad <= e["t"] - now <= pad:
+                        why = f"PROP: news window ({e['currency']} {e['title']} ±{pad // 60} min)"
+                        return why, (why if f.cfg.get("prop_close_news", True) else None)
+        return None, None
+
+    def prop_guard(self):
+        """Close a PROP follower's SuperChart legs (and cancel its pending grid orders) when its rules say so."""
+        nt = getattr(self.hub, "newstrader", None)
+        for f in self.followers:
+            if not f.cfg.get("prop") or not f.connected:
+                continue
+            _, close = self.prop_state(f)
+            if not close:
+                continue
+            done = []
+            with self.lock:
+                legs = [(g, g.legs[f.id]) for g in self.groups.values() if f.id in g.legs]
+            for g, t in legs:
+                if not f.pos(t):
+                    continue
+                r = f.backend.call("close", t, None)
+                if r.get("ok"):
+                    with self.lock:
+                        g.legs.pop(f.id, None)
+                        self._prop_closed = getattr(self, "_prop_closed", set()) | {(g.gid, f.id)}
+                    done.append(g.gid)
+                else:
+                    self.hub.note("error", f"PROP {f.name}: hindi maisara ang {g.gid}: {r.get('error')}")
+            if done:
+                with self.lock:
+                    self._save_groups()
+                self.hub.note("warn", f"PROP {f.name}: isinara ang {len(done)} trade ({close}); ang master ay tuloy")
+            if nt is not None:
+                try:
+                    with nt.lock:
+                        n = sum(nt._cancel_event(st, f.id) for st in nt.events.values() if st.get("stage") == "placed")
+                    if n:
+                        self.hub.note("warn", f"PROP {f.name}: binura ang {n} pending order ({close})")
+                except Exception as e:
+                    self.hub.note("error", f"PROP {f.name}: pending cancel failed: {e}")
 
     def open(self, side, lot, sl_dist, tp_dist, kind="manual", note="", request_id=None, lifecycle=None, meta=None):
         """Send one trade to the master and every enabled follower.
@@ -1278,6 +1384,8 @@ class TradeManager:
             todo = []
             for f in self.followers:                    # every follower that is left out says WHY (event log + journal)
                 why_f = self.follower_skip_reason(f)
+                if why_f is None and kind == "news" and f.cfg.get("prop") and f.cfg.get("prop_no_news", True):
+                    why_f = "PROP: walang NEWS trades"
                 if why_f is None:
                     todo.append(f)
                 elif why_f:
@@ -1299,9 +1407,10 @@ class TradeManager:
 
             def send(f):
                 flot = f.cfg["lot"]
-                if mult != 1.0:
+                m = 1.0 if (f.cfg.get("prop") and f.cfg.get("prop_no_x2", True)) else mult   # v2.8.30: PROP = no x2
+                if m != 1.0:
                     step = float((getattr(f, "broker", None) or {}).get("lot_step") or 0.01)
-                    flot = round(max(step, round(f.cfg["lot"] * mult / step) * step), 2)
+                    flot = round(max(step, round(f.cfg["lot"] * m / step) * step), 2)
                 return f, f.backend.call("open_market", f.symbol, side, flot, sl_dist, tp_dist, comment)
 
             for f, r in self.pool.map(send, todo):
@@ -1514,10 +1623,22 @@ class TradeManager:
                       f"TRADING {'ARMED' if self.armed else 'DISARMED'}" + (" (paper)" if self.paper else " (LIVE)"))
         return dict(ok=True, armed=self.armed)
 
+    def _keep_password(self, f):
+        """The browser never gets the password back: an empty field keeps the saved one; "clear_password" removes it."""
+        f = dict(f or {})
+        if f.pop("clear_password", False):
+            f["password"] = ""
+            return f
+        if not f.get("password"):
+            old = next((x for x in self.cfg.get("followers") or [] if x.get("id") == f.get("id")), None)
+            if old:
+                f["password"] = old.get("password", "")
+        return f
+
     def update_config(self, new):
         with self.lock:
             cfg = {"master": clean_master(new.get("master") or self.cfg["master"]),
-                   "followers": [clean_follower(f) for f in (new.get("followers") or [])],
+                   "followers": [clean_follower(self._keep_password(f)) for f in (new.get("followers") or [])],
                    "safety": {k: v for k, v in (new.get("safety") or self.cfg.get("safety") or {}).items()
                               if k in SAFETY_DEFAULTS},
                    "copy_manual": bool(new.get("copy_manual", self.cfg.get("copy_manual", True))),
@@ -1685,7 +1806,7 @@ class TradeManager:
             mv["data_status"] = self.src.status
         return dict(paper=self.paper, armed=self.armed, can_trade=can, reason=why, halted=self.halted,
                     safety=self.safety, master=mv, followers=[f.view() for f in self.followers],
-                    groups=groups, config=self.cfg)
+                    groups=groups, config=public_config(self.cfg))
 
     def stop(self):
         self.running = False

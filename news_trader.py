@@ -46,7 +46,7 @@ DEFAULTS = dict(
     sl_fixed=5.0,
     max_sl=10.0,                # never risk more than this distance (box SL is capped)
     tp_mode="rr",               # "rr" = SL distance x tp_rr, "fixed" = tp_fixed
-    tp_rr=2.0,
+    tp_rr=5.0,                  # v2.8.35 (Eugene): 1:5 like the strategies (the 0.5R ladder / time exit take the exits)
     tp_fixed=10.0,
     conso_tf="M5",
     # before the news: close every OPEN SuperChart trade (never other EAs / manual MT5 trades)
@@ -54,7 +54,7 @@ DEFAULTS = dict(
     close_before_sec=180,       # close this many seconds before the release (>= place_before_sec)
     # v2.8.7 (Eugene): after the release
     follow_trend=True,          # (v2.8.8 default ON, Eugene: VPS, walang magki-click) news BUY/SELL STOP fills on the master -> also a market TREND trade in that direction
-    time_exit_min=10,           # close every news trade (news fill + its TREND) this many minutes after it opened (0 = off)
+    time_exit_min=0,            # close every news trade this many minutes after it opened (0 = off; v2.8.36 off: trailing)
     # no consolidation box: "distance" = BUY STOP / SELL STOP at price +/- nobox_offset | "skip" = no trade
     nobox_mode="distance",
     nobox_offset=3.0,           # $ from the mid price to each stop when there is no box
@@ -66,13 +66,21 @@ CONSO_KEYS = ("lookback", "swing", "min_touches", "tol_pips", "pip", "min_bars",
 NUM_KEYS = [k for k, v in DEFAULTS.items() if isinstance(v, (int, float)) and not isinstance(v, bool)]
 
 
+SETTINGS_VERSION = 3
+
+
 def load_settings():
     s = dict(DEFAULTS)
     try:
         with open(SETTINGS_FILE) as f:
-            for k, v in json.load(f).items():
-                if k in s:
-                    s[k] = v
+            raw = json.load(f)
+        if int(raw.get("settings_version", 1) or 1) < 2:
+            raw["tp_rr"], raw["tp_mode"] = 5.0, "rr"   # v2.8.35 (Eugene: "news conso at news trend 1:5 din"), once
+        if int(raw.get("settings_version", 1) or 1) < 3:
+            raw["time_exit_min"] = 0                   # v2.8.36 (Eugene: "alisin mo na ung 10 mins, naka-trail naman")
+        for k, v in raw.items():
+            if k in s:
+                s[k] = v
     except (OSError, ValueError):
         pass
     return s
@@ -154,7 +162,7 @@ class NewsTrader:
             self.settings = clean_settings(new or {}, self.settings)
             try:
                 with open(SETTINGS_FILE, "w") as f:
-                    json.dump(self.settings, f, indent=2)
+                    json.dump(dict(self.settings, settings_version=SETTINGS_VERSION), f, indent=2)
             except OSError:
                 pass
         return dict(ok=True, settings=self.settings)
@@ -417,6 +425,9 @@ class NewsTrader:
             out.append((tm.master, float(master_lot if master_lot is not None else self.settings["master_lot"])))
         for f in tm.followers:
             why = tm.follower_skip_reason(f) if hasattr(tm, "follower_skip_reason") else None
+            if why is None and getattr(self, "_placing_news", False) and f.cfg.get("prop") \
+                    and f.cfg.get("prop_no_news", True):
+                why = "PROP: walang NEWS trades"
             if why is None:
                 out.append((f, float(f.cfg["lot"])))
             elif why:
@@ -447,7 +458,12 @@ class NewsTrader:
                 res.append((L, r))
             return a, res
 
-        for a, res in tm.pool.map(one, self._accounts(master_lot)):
+        self._placing_news = st.get("kind") != "strategy"          # a NEWS grid: PROP followers sit it out
+        try:
+            accts = self._accounts(master_lot)
+        finally:
+            self._placing_news = False
+        for a, res in tm.pool.map(one, accts):
             lst = st["orders"].setdefault(a.id, [])
             for L, r in res:
                 if r.get("ok"):
@@ -627,6 +643,8 @@ class NewsTrader:
             if f.id in g.legs:
                 continue                                          # already filled on its own (early fill)
             why = tm.follower_skip_reason(f)
+            if why is None and st.get("kind") != "strategy" and f.cfg.get("prop") and f.cfg.get("prop_no_news", True):
+                why = "PROP: walang NEWS trades"
             if why is not None:
                 if why:
                     self.hub.note("warn", f"FOLLOWER {f.name}: hindi sumunod sa master fill {gid} ({why})")

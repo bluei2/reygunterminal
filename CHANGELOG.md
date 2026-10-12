@@ -1,5 +1,190 @@
 # REYGUN SuperChart: changelog
 
+## v2.8.49 (build 2026-10-09.49)
+**Balik sa setup na kumikita hanggang Oct 7** (Eugene: "ok pa ang trade natin hanggang Oct 7, Oct 8 dun na" → "ibalik
+sa dati").
+- **Dahilan:** hanggang v2.8.43 may kasamang lumang `strategy_settings.json` ang zip, kaya ito ang talagang tumatakbo
+  sa VPS: **HTF filter ON**, **ORDER FLOW required** sa TREND / PULLBACK / CONSO, PULLBACK RSI 40/60, CONSO box max $10.
+  Noong Oct 8 nawala ang mga ito (v2.8.44: walang file + pinindot ang NORMAL; v2.8.45: order flow "info lang" + CMI
+  router). Mas maraming trade ang nakapasok sa range market.
+- **Ibinalik:** ang lumang TREND (H4 BOS + 2 M15 BOS + order flow + hindi overbought/oversold + MMI/CMI, SL sa swing),
+  HTF filter ON, order flow REQUIRED, PULLBACK 40/60, CONSO max box $10, **walang CMI router**. Inalis ang BOS retest
+  TREND (v2.8.46–47) at ang `max_range_atr` (v2.8.48; ang $10 max box ang dating proteksyon).
+- **NORMAL = ang setup na ito na** (para hindi na mawala kapag pinindot ang NORMAL). Isang beses ina-apply sa
+  kasalukuyang settings (schema 26); naiwan ang AUTO switches.
+- **Naiwan** mula v2.8.48: CONSO failed-breakout exit at isang talo lang bawat box (may switch sa AUTO TRADE → MASTER).
+- Forecast: naiwan ang `values` snapshot (read-only).
+
+## v2.8.48 (build 2026-10-09.48)
+CONSO sa RANGE (Eugene, 2026-10-08: range 4113–4133, SELL STOP napuno sa ilalim −$19.83, BUY STOP sa itaas −$20.09).
+- **Malapad na box = range, hindi siksik** (`max_range_atr` 4.0; AGGRESSIVE 5.0): walang CONSO grid kapag ang box ay
+  mas malapad sa 4 × ang karaniwang ATR (average ng huling 100 kandila). Panel: "malapad ang box: $20 > 4 × …".
+- **Failed breakout exit** (`conso_fail_exit`, ON): kapag napuno ang BUY / SELL STOP pero ang susunod na M15 close ay
+  BUMALIK sa loob ng box (≥ 0.2 × ATR), isasara agad = maliit na talo imbes na buong SL sa kabilang dulo ng box.
+- **Isang talo lang bawat box** (`conso_one_loss`, ON): kapag natalo ang isang CONSO trade ng box, wala nang bagong
+  grid sa parehong box hanggang may bagong box.
+- Lahat ay may switch sa AUTO TRADE → MASTER at sa CONSO settings.
+
+## v2.8.47 (build 2026-10-08.47)
+Range filter sa TREND (Eugene: "may prob tayo sa ganitong market", M15 range 4110–4140: BUY sa tuktok ng range).
+- **Tunay na break lang** (`min_ext_atr` 1.0): ang bagong high/low ay dapat lumampas sa na-break na level ng
+  ≥ 1 × ATR bago bilangin ang retest. Sa range, ilang cents lang ang "break" kaya walang entry. (AGGRESSIVE 0.7)
+- **HINDI RANGE** (`not_range`, required): ADX ≥ 20 (AGGRESSIVE 18). Kapag tahimik, CONSO ang hahawak.
+- **HTF kasabay** (`bos_h4`, required): ang huling H4 BOS (SCALP: H1) ay nasa direksyon ng trade. Naka-OFF sa
+  AGGRESSIVE.
+- Isang beses idinagdag sa kasalukuyang settings (schema 24). Puwedeng i-OFF bawat isa sa panel.
+- Panel: bagong ilaw "hindi range (ADX ≥ 20)" at "H4 BOS". Mas kaunti ang TREND trade, pero iiwas sa chop.
+
+## v2.8.46 (build 2026-10-08.46)
+- **Bagong TREND = BOS RETEST** (Eugene: "ito na lang gawin mo na trend natin, alisin mo ang lumang trend"). Galing sa
+  "Valid BOS Pullback" (Pine), isinalin sa Python, closed bars lang (walang repaint):
+  1. **BOS**: nag-close lampas sa pinakamataas na swing high / pinakamababang swing low (huling 48 kandila)
+  2. **Bagong high/low**: confirmed kapag 3 kandila nang hindi nalalampasan
+  3. **Malinis**: 5 kandila na hindi tumatama ang wick sa na-break na level (ang maagang tama = balik sa 0)
+  4. **Retest = ENTRY**: tumama ang kandila sa na-break na level → MARKET entry kasabay ng bagong trend
+  5. ✓ = nag-close lampas sa bagong high/low (tuloy ang trend; pang-chart lang)
+  Patay ang setup kapag nag-close pabalik lampas sa level ng > 0.1 × ATR (sa Pine: 4 ticks, masyadong sikip sa gold),
+  o lumampas sa 120 kandila. Ang BOS sa kabilang direksyon ay kinakansela ang lahat ng lumang setup.
+- **SL** lampas sa dulo ng pullback (at sa level) + 0.2 × ATR, min 0.5 × ATR, max $20 (SCALP $15). TP 1:5 (AGGRESSIVE /
+  SCALP 1:3), BE sa +0.5R at trailing gaya dati.
+- **Inalis** ang lumang TREND conditions (2 M15 BOS + H4 BOS + RSI kontra + M5 structure + CVD + OB kontra).
+  Optional (OFF): HTF BOS kasabay, MMI/CMI. **CMI router OFF sa TREND**: bumababa ang CMI habang nagre-retest, kaya
+  halos lahat ng retest ay maibibigay sa PULLBACK kung naka-ON.
+- AGGRESSIVE: 3 malinis na kandila lang. SCALP: sa M5 (48 bars = 4 oras, gaya ng Pine default).
+- Chart: TR ▲/▼ sa retest, ✓ sa tuloy na BOS, BOS / EXT na linya ng setup na binabantayan. Panel: BOS → bagong
+  high/low → malinis x/5 → retest, at kung anong presyo ang hinihintay.
+- Isang beses na pinalitan ang TREND conditions sa kasalukuyang settings (schema 23); RR, max SL at AUTO ay naiwan.
+- **Hindi pa na-test sa totoong history.** Ipadala ang M15 / H1 / H4 CSV para masukat bago pagkatiwalaan sa live.
+
+## v2.8.45 (build 2026-10-05.45)
+Audit fixes (Eugene: order flow = info, CMI router, auto-start stays ON, 0.5R ladder stays).
+- **CMI ROUTER: isang strategy bawat kondisyon.** CMI ≥ 55 → TREND lang; CMI ≤ 35 → CONSO lang; nasa gitna →
+  PULLBACK lang (`route`, `route_hi`, `route_lo` bawat strategy). Pareho sa live, chart markers, panel at forecast.
+  Ang TL BREAK at NEWS ay hindi sakop. Kapag hinarangan: "CMI router: CMI 62 → TREND ang may hawak".
+- **Order flow = info lang** (hindi na required): walang tick data sa history, kaya pareho na ang live at forecast
+  test. Isang beses inalis sa required (schema 22); makikita pa rin sa panel.
+- **Forecast:** bawat strategy forecast may `values` snapshot (MMI, CMI, ADX, RSI, MFI, ATR, EMA, BOS H4/M15/M5,
+  CVD change at pinagmulan, router zone, met). Bagong stats: max win / loss streak, average minuto bago ma-trigger,
+  average minuto papuntang TP at papuntang SL.
+
+## v2.8.44 (build 2026-10-05.44)
+- **BLOCKER FIX (audit 2026-10-08): wala nang settings file sa update zip.** Mula v2.8.30, may kasamang
+  `strategy_settings.json` (galing sa tests: schema 16, RR 1:2, HTF filter ON) ang bawat zip, kaya pinapalitan nito
+  ang strategy settings mo tuwing mag-e-extract.
+  - `tests/harness.py`: LAHAT ng runtime file ng bawat module ay papunta na sa temp folder habang nagte-test.
+  - Bagong `make_release.py`: gumagawa ng zip na walang `*.json` / `*.jsonl` / cache, at **humihinto ang build**
+    kapag may runtime file na makakasama. Tests: `tests/test_release.py`.
+- Pagkatapos i-install: pindutin ang **NORMAL** isang beses para maibalik ang tamang setup.
+
+## v2.8.43 (build 2026-10-05.43)
+- **MMI + CMI sa lahat ng strategy** (Eugene). MMI = Market Meanness Index (100 bars, ~75 random, bumababa =
+  trend); CMI = Choppy Market Index (14 bars, mataas = trend, mababa = chop). Bagong required na kondisyon `mmi_cmi`:
+  - TREND: CMI ≥ 45 O bumababa ang MMI (AGGRESSIVE CMI ≥ 35)
+  - PULLBACK: MMI ≥ 66 O CMI ≤ 70 (hindi runaway trend) (AGGRESSIVE MMI ≥ 60 O CMI ≤ 75)
+  - CONSO: CMI ≤ 40 AT hindi bumababa ang MMI (AGGRESSIVE CMI ≤ 45)
+  Hindi humaharang habang kulang pa ang bars. Isang beses idinagdag sa kasalukuyang settings (schema 21).
+
+## v2.8.42 (build 2026-10-05.42)
+- **CONSO grid bawat mode** (Eugene): NORMAL = 1 BUY STOP + 1 SELL STOP; AGGRESSIVE = 2 BUY STOP + 2 SELL STOP;
+  SCALP = 1 + 1. Inilipat isang beses sa NORMAL (schema 20, kung 2 pa ang naka-set).
+
+## v2.8.41 (build 2026-10-05.41)
+- **CONSO max SL = kapareho ng TREND / PULLBACK** (Eugene: "isabay sa SL nila ang conso"): NORMAL at AGGRESSIVE
+  200 pips ($20), SCALP 150 pips ($15). Isang beses inilipat sa kasalukuyang settings (schema 19), kaya gumagana na
+  agad kahit hindi pinipindot ang mode.
+
+## v2.8.40 (build 2026-10-05.40)
+- **SCALP CONSO max SL = 150 pips ($15)** din (Eugene: "sunod mo na rin sa conso"; dati $4).
+
+## v2.8.39 (build 2026-10-05.39)
+- **SCALP max SL = 150 pips ($15)** (Eugene) para sa TREND, PULLBACK at TL BREAK. Ang CONSO ng SCALP ay $4 pa rin.
+
+## v2.8.38 (build 2026-10-05.38)
+- **Inayos ang 3 mode** (Eugene): lahat ay sa SC logic (PULLBACK RSI + OB o spike, BUY at SELL; CONSO laging pares;
+  BE +0.5R + trailing bawat 0.5R; reversal kapag may entry; bawat strategy sariling trade).
+  - **NORMAL:** M15, TREND 2 BOS M15 + H4 + M5 + CVD, SL swing max $20, TP 1:5, lot x1 (x2 kapag naka-align).
+  - **AGGRESSIVE:** M15, mas maluwag (1 BOS M15, RSI 35/65, spike 2.5 ATR, ADX<22, max 4 open), SL max $20,
+    TP 1:3, **x2 lot** sa TREND / PULLBACK / TL BREAK (hindi dodoble ulit kapag naka-align).
+  - **SCALP:** M5 (2 BOS M5 + H1), SL max $8 (CONSO $4, 1 level, TL BREAK $8), TP 1:3, lot x1.
+  - Bagong AUTO setting `mode_mult`, `tl_max_sl`, `tl_rr` (nakatakda ng mode).
+
+## v2.8.37 (build 2026-10-05.37)
+- **Modes: SCALP / NORMAL / AGGRESSIVE lang** (Eugene). Wala na ang MASTER button (galing iyon sa RG Master EA na
+  tinanggal na). **NORMAL = ang SC setup** na binuo sa MASTER: TREND (H4 + 2 M15 BOS + M5 + CVD, swing SL max $20),
+  PULLBACK RSI 30/70 + (OB o spike) BUY/SELL kahit kontra HTF, CONSO ADX<20 pares, TP 1:5, BE +0.5R + trailing,
+  reversal kapag may entry. Ang naka-save na "master" ay nagiging "normal" (pareho ang settings).
+
+## v2.8.36 (build 2026-10-05.36)
+- **Walang 10-min exit sa news trades** (Eugene: "alisin mo na ung 10 mins, naka-trail naman"): `time_exit_min` = 0
+  (isang beses inilipat, news settings v3). Ang NEWS CONSO / NEWS TREND ay sarado sa trailing (0.5R ladder), sa TP
+  1:5, o sa SL. Maibabalik sa ⚙ ng News Trade.
+
+## v2.8.35 (build 2026-10-05.35)
+- **NEWS CONSO at NEWS TREND: TP 1:5** (Eugene: "news conso at news trend 1:5 din ... basta naka-trail pa rin").
+  `tp_rr` = 5, isang beses inilipat (news settings v2). Naka-trail pa rin (0.5R ladder, BE sa +0.5R) at sarado pa
+  rin pagkalipas ng `time_exit_min` (10 min) kung hindi pa tapos.
+
+## v2.8.34 (build 2026-10-05.34)
+- **TP 1:5** (Eugene: "pwede tayo mag 1:5RR, may trailing naman tayo, tapos may pullback na mag-autoclose"):
+  TREND, PULLBACK, CONSO at TL BREAK. Ang labas ay sa 0.5R trailing ladder (BE +0.5R, bawat +0.5R isang hakbang sa
+  likod) at sa reversal; ang TP ay para sa malalaking galaw. Isang beses inilipat (settings schema 17) at nasa
+  MASTER profile na rin (kasama ang 0.5R ladder at CONSO protection, para hindi bumalik sa luma kapag na-click ang
+  MASTER). TL BREAK: `tl_rr` (default 5).
+
+## v2.8.33 (build 2026-10-05.33)
+- **Break-even sa +0.5R, tapos hagdan bawat 0.5R** (Eugene: "0.5R = BE, 1R : 0.5R and so on"): +0.5R → BE
+  (+$0.20), +1R → lock 0.5R, +1.5R → lock 1R, +2R → TP (1:2). Para sa lahat ng trade (SuperChart, manual, EA).
+  Isang beses inilipat (position settings v4). Ang TP/2 scaling ng v2.8.32 ay naka-OFF na (ang 0.5R BE ay sakto na
+  rin sa 1:1 trades: kalahati ng daan papunta sa TP).
+
+## v2.8.32 (build 2026-10-05.32)
+- **Protection para sa 1:1 trades** (Eugene: "1:1 lng kc ung trade"): ang BE / lock / trailing ay para sa 1:2 (1R =
+  kalahati ng daan papunta sa TP). Ang trade na mas malapit ang TP kaysa 2R (hal. 1:1) ay gumagamit ng TP/2 bilang
+  1R, kaya nagsisimula ang protection sa kalahati ng daan papunta sa TP. Walang pagbabago sa 1:2 at mas malawak.
+  Setting `tp_scale` (default ON). Hal. SELL 4117.75, TP 4105.03: BE sa 4111.39, at sa 4108 ang SL ay +$6.36.
+
+## v2.8.31 (build 2026-10-05.31)
+- **Trailing / profit protection pati sa MANUAL at EA trades** (Eugene: "kahit anong trade, manual, EA man o
+  SuperChart"): ang trade na binuksan mo sa MT5 (PC / phone) o ng RG M EA sa master ay binibigyan na rin ng
+  break-even, lock at trailing; sumusunod ang followers. Ang 1R ay ang UNANG SL ng trade (kung idinagdag mo ang SL
+  pagkatapos, iyon ang 1R). Kailangang may SL ang trade. Setting `manage_manual` (default ON).
+
+## v2.8.30 (build 2026-10-05.30)
+- **PROP FIRM follower** (Accounts → follower → "PROP FIRM account"). Ang master at ibang followers ay tuloy; ang
+  PROP account lang ang sumusunod sa rules:
+  - **News:** walang NEWS trades (news conso / news TREND), walang bagong trade ±N min (default 5) sa high-impact
+    news, at isinasara ang open trades niya bago ang window (`prop_close_news`).
+  - **Weekend:** walang open trade sa weekend: isinasara sa Biyernes cut-off (default 20:00 UTC = Sab 4:00 AM PH),
+    walang bagong trade hanggang Linggo 23:00 UTC.
+  - **Walang x2** (fixed lot kahit naka-align).
+  - Binubura rin ang pending CONSO orders ng PROP account sa mga oras na iyon. Hindi ito binibilang na COPY CHECK.
+
+## v2.8.29 (build 2026-10-05.29)
+- **SuperChart na ang nagla-login ng follower MT5** (Eugene): sa Accounts, bawat follower may Login #, Server at
+  Password. Pagbukas / Reconnect, ini-initialize ang MT5 terminal ng follower gamit ang mga iyon, kaya hindi na
+  kailangang mag-login nang manual sa MT5. Kailangan pa rin ng sariling MT5 terminal (folder) bawat account.
+- Ang password ay naka-save LANG sa accounts.json sa VPS; hindi ito ipinapadala pabalik sa browser (makikita lang
+  "● naka-save"); blangkong field = hindi babaguhin. Kapag mali: "(mali ba ang login / password / server?)".
+
+## v2.8.28 (build 2026-10-05.28)
+- **TRAILING ON** (Eugene: CONSO BUY 4170 → 4180+, bumalik sa SL): step trailing bawat 0.5R mula +1R (sa +1R ang SL
+  ay +0.5R, sa +1.5R → +1R, sa +2R ang TP). Tighten-only; hindi ginagalaw ang TP. Isang beses inilipat
+  (position settings v3); maibabalik sa 🛡 chip.
+- **CONSO kasama na sa profit protection** (break-even / lock / trailing): `conso_protect` ON, isang beses
+  (auto settings v5). Dati: ang CONSO ay naiiwan sa sariling SL / TP gaya ng Master EA.
+- Hal. CONSO BUY 4170, SL $8: sa 4178 (+1R) SL → 4174; sa 4182 (+1.5R) SL → 4178 (+$8) sa halip na -$8.
+
+## v2.8.27 (build 2026-10-05.27)
+- **Bagong AUTO strategy: TL BREAK** (Eugene, trendline breakout gaya ng "simplified entry"):
+  - **TL break:** papasok sa CLOSE ng kandilang bumasag sa trend line (Trend Line Breakout plugin, ≥2 touches).
+  - **TL retest:** RE-ENTRY kapag na-retest ang nabasag na line at humawak (hiwalay na trade).
+  - SL sa likod ng swing, max $20 (200 pips); TP 1:2. Puwedeng kontra sa HTF (madalas ganoon ang TL break).
+  - Kasama sa: x2 kapag naka-align (H4·H1·M15), reversal kapag may entry (isinasara ang mga kontrang trade, at
+    isinasara rin ang TL trades ng ibang reversal), copy sa followers, daily DD / lock. Walang % risk block.
+  - Button na **● TL BREAK** sa itaas ng chart (default ON; may confirm kapag ginawang MANUAL). Setting `tl_auto`.
+- FIX: ang master daily DD migration (v2.8.25/26) ay pumapalit lang sa preset ($20 / 200 pips), hindi sa sariling
+  limit mo.
+
 ## v2.8.26 (build 2026-10-05.26)
 - **Master daily DD = 400 pips** (Eugene: "400 ang dd limit ntin ndi 200"). Pinapalitan din ang 200 pips na inilagay
   ng v2.8.25 (isang beses; ang sariling value mo ay hindi ginagalaw). 0.01 lot = -$40.

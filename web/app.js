@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const $ = (s) => document.querySelector(s);
-  const BUILD = "2026-10-05.26";          // same as BUILD in superchart.py
+  const BUILD = "2026-10-09.49";          // same as BUILD in superchart.py
   const TFS = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"];
   const LS = (() => { try { return window.localStorage; } catch (e) { return null; } })();
   const lsGet = (k, d) => { try { return (LS && LS.getItem(k)) || d; } catch (e) { return d; } };
@@ -1553,12 +1553,22 @@
         <span class="astat" id="st-${esc(f.id || "new" + i)}"></span></div>
       <div class="agrid">
         <label class="pf wide2"><span>MT5 terminal path (terminal64.exe)</span><input data-k="path" value="${esc(f.path)}" placeholder="C:\\MT5_Switch\\terminal64.exe"></label>
-        <label class="pf"><span>Login # (check)</span><input type="number" data-k="login" value="${f.login || ""}" placeholder="optional"></label>
+        <label class="pf"><span>Login #</span><input type="number" data-k="login" value="${f.login || ""}" placeholder="account #"></label>
+        <label class="pf"><span>Server (broker)</span><input data-k="server" value="${esc(f.server || "")}" placeholder="hal. LiteFinance-MT5-Live"></label>
+        <label class="pf"><span>Password ${f.has_password ? '<i class="c-bull">● naka-save</i>' : ""}</span><input type="password" data-k="password" value="" autocomplete="new-password" placeholder="${f.has_password ? "iwanang blangko = hindi babaguhin" : "para mag-login ang SuperChart"}"></label>
         <div class="pf symf"><span>Symbol</span><div class="symrow"><input data-k="symbol" value="${esc(f.symbol)}" placeholder="same as master">
           <button class="btn-sm ghost symfind" data-act="findsym" data-acc="${esc(f.id || "")}" title="Find this broker's gold symbol (prefix/suffix)">🔍</button></div>
           <div class="symlist" hidden></div></div>
         <label class="pf"><span>Fixed lot</span><input type="number" step="0.01" min="0" data-k="lot" value="${esc(f.lot)}"></label>
         ${RISK_FIELDS(f, false, T.paper)}
+        <label class="pf wide2 prop-head"><input type="checkbox" data-k="prop" ${f.prop ? "checked" : ""}> <b>PROP FIRM account</b> <span class="muted small">— sumusunod sa karaniwang rules ng prop firm</span></label>
+        ${f.prop ? `<label class="ck"><input type="checkbox" data-k="prop_no_news" ${f.prop_no_news !== false ? "checked" : ""}> Walang trade malapit sa high-impact news (walang NEWS trades; ang master ay tuloy)</label>
+        <label class="pf"><span>News: ± minuto</span><input type="number" min="0" max="120" step="1" data-k="prop_news_pad" value="${esc(f.prop_news_pad ?? 5)}"></label>
+        <label class="ck"><input type="checkbox" data-k="prop_close_news" ${f.prop_close_news !== false ? "checked" : ""}> Isara ang open trades bago ang news window</label>
+        <label class="ck"><input type="checkbox" data-k="prop_no_weekend" ${f.prop_no_weekend !== false ? "checked" : ""}> Walang open trade sa weekend (isasara sa Biyernes)</label>
+        <label class="pf"><span>Biyernes cut-off (UTC oras)</span><input type="number" min="0" max="23.5" step="0.5" data-k="prop_fri_close" value="${esc(f.prop_fri_close ?? 20)}"></label>
+        <label class="ck"><input type="checkbox" data-k="prop_no_x2" ${f.prop_no_x2 !== false ? "checked" : ""}> Walang x2 lot (fixed lot lang kahit naka-align)</label>
+        <p class="muted small wide2">Para sa daily loss / max drawdown ng firm, gamitin ang Daily DD sa itaas (mas mababa sa limit ng firm). Siguraduhin sa rules ng firm na ALLOWED ang EA / copy trading.</p>` : ""}
       </div>
       <div class="abtns"><button class="btn-sm ghost" data-act="reconnect">Reconnect</button>
         <button class="btn-sm ghost" data-act="unlock">Unlock</button>
@@ -1576,6 +1586,8 @@
     document.querySelectorAll("#acctList .acard[data-idx]").forEach((card) => {
       const f = out.followers[+card.dataset.idx];
       card.querySelectorAll("[data-k]").forEach((el) => { f[el.dataset.k] = val(el); });
+      if (!f.password) delete f.password;            // empty = keep the saved password (it is never sent back)
+      delete f.has_password;
     });
     out.copy_manual = $("#copyManual").checked;
     out.copy_ea = $("#copyEA").checked;
@@ -1735,6 +1747,12 @@
     await pollTrading();
     acctDraft = JSON.parse(JSON.stringify(T.config));
     renderAccountsForm();
+  });
+  $("#acctList").addEventListener("change", (e) => {
+    if (e.target.dataset && e.target.dataset.k === "prop" && acctDraft) {   // v2.8.30: show/hide PROP options
+      acctDraft = readAccountsForm();
+      renderAccountsForm();
+    }
   });
   $("#acctList").addEventListener("click", async (e) => {
     const b = e.target.closest("button[data-act]");
@@ -2300,7 +2318,7 @@
     ["close_before_news", "Isara ang open trades bago ang news", "SuperChart trades lang (hindi ang ibang EA)", ["true", "false"]],
     ["close_before_sec", "Isara ilang sec bago", ">= place before"],
     ["follow_trend", "TREND pagkatapos ng news", "kapag na-hit ang news stop sa master: may kasunod na market trade sa parehong direksyon", ["false", "true"]],
-    ["time_exit_min", "Isara ang news trades pagkalipas ng (min)", "news trade + TREND nito · 0 = off"],
+    ["time_exit_min", "Isara ang news trades pagkalipas ng (min)", "0 = off (trailing ang magsasara)"],
     ["nobox_mode", "Kapag walang box", "distance = presyo ± offset · skip = walang trade", ["distance", "skip"]],
     ["nobox_offset", "Walang box: layo ng stop $", "mula sa presyo"], ["nobox_sl", "Walang box: SL $", ""],
     ["cancel_after_min", "Cancel unfilled after (min)", ""], ["buffer_pips", "Entry buffer (pips)", "beyond the box edge"],
@@ -2485,6 +2503,12 @@
       if (window.rgStratPaint) window.rgStratPaint(b, isOn);
       else b.innerHTML = `${isOn ? "●" : "○"} ${b.dataset.lbl}`;
     });
+    const tl = $("#tsTL");                           // v2.8.27 TL BREAK (an AUTO TRADE setting, not strategies.py)
+    if (tl) {
+      const tlOn = !!(AT && AT.settings && AT.settings.tl_auto !== false);
+      tl.classList.toggle("on", tlOn);
+      tl.innerHTML = `${tlOn ? "●" : "○"} TL BREAK`;
+    }
     const st = AT && AT.settings;
     const extra = st && st.strategies_only === false && (st.sources || []).length ? ` <span class="muted" title="iba pang AUTO source (Trading → AUTO TRADE settings)">+ ${esc(st.sources.join(" + "))}</span>` : "";
     $("#tsInfo").innerHTML = !trading ? '<span class="muted">READ-ONLY: walang trading</span>'
@@ -2502,7 +2526,7 @@
     if (st.be_r) parts.push(`BE ${st.be_r}R`);
     if (st.be_usd) parts.push(`BE $${st.be_usd}`);
     (st.profit_lock || []).forEach(([a, l]) => parts.push(`${a}R→lock ${l}R`));
-    if (st.trail_mode && st.trail_mode !== "none") parts.push(`trail ${st.trail_mode}`);
+    if (st.trail_mode && st.trail_mode !== "none") parts.push(st.trail_mode === "step" ? `trail ${st.step_r}R mula ${st.trail_start_r}R` : `trail ${st.trail_mode}`);
     (st.partial_close || []).forEach(([a, f]) => parts.push(`close ${Math.round(f * 100)}% @${a}R`));
     b.hidden = false;
     b.classList.toggle("on", !!st.enabled);
@@ -2861,6 +2885,9 @@
         <label class="pf bt-inl"><span>Secure: isara ang % sa +R (0 = off)</span>${num("trend_secure_r", "0.1")}</label>
         <label class="pf bt-inl"><span>Secure %</span>${num("trend_secure_pct", "5")}</label>
         <label class="ck"><input type="checkbox" data-a="conso_protect" ${st.conso_protect ? "checked" : ""}> CONSO: may break-even / lock (EA: off)</label>
+        <label class="ck"><input type="checkbox" data-a="conso_fail_exit" ${st.conso_fail_exit !== false ? "checked" : ""}> CONSO: isara kapag bumalik sa loob ng box ang close (failed breakout = maliit na talo)</label>
+        <label class="pf bt-inl"><span>…bumalik nang ≥ × ATR</span>${num("conso_fail_atr", "0.05")}</label>
+        <label class="ck"><input type="checkbox" data-a="conso_one_loss" ${st.conso_one_loss !== false ? "checked" : ""}> CONSO: isang talo lang bawat box (walang bagong grid sa parehong range)</label>
         <div class="muted small">Early exit <b>m15_2bos</b>: isasara ang TREND trade bago mag-TP kapag ang ika-2 BOS (huling 32 bars) ay kontra dito. Secure: hindi mahahati ang 0.01 lot, kaya buo itong mananatili. Ang daily loss / profit target ay nasa <b>Accounts</b> (master: $20 / $60).</div></div></div>
       <label class="pf"><span>Master lot</span>${num("lot", "0.01")}</label>
       <label class="pf"><span>Timeframe</span>${sel("tf", ["M1", "M5", "M15", "M30", "H1"])}</label>
@@ -4218,7 +4245,7 @@
   function liveHtml(n, e, cfg) {
     if (!e) return "";
     const ok = e.ok;
-    const SHORT = { bos_m15: `${cfg.bos_ltf || "M15"} BOS ×${cfg.bos_m15_min || 2}`, bos_h4: `${cfg.bos_htf || "H4"} BOS`, rsi: "RSI oversold/overbought", mfi: "MFI", doji: "Doji", ob: "Order block", ob_spike: "OB o spike", spike: "Spike", vol_low: "Mahinang volume", adx_low: "ADX < " + (cfg.adx_max || 20), box: "Box", squeeze: "BB squeeze", atr_low: "ATR tahimik", stoch: "Stoch", cci: "CCI", wpr: "W%R", near_ema: "Malapit sa EMA", turn: "Bumabalik", volatile: "hindi VOLATILE", range: "siksik na range", trend: "trend", of_buyers: "Order flow", of_turn: "Order flow", of_balanced: "Order flow balanse" };
+    const SHORT = { bos_m15: `${cfg.bos_ltf || "M15"} BOS ×${cfg.bos_m15_min || 2}`, bos_h4: `${cfg.bos_htf || "H4"} BOS`, rsi: "RSI oversold/overbought", mfi: "MFI", doji: "Doji", ob: "Order block", ob_spike: "OB o spike", mmi_cmi: "MMI/CMI", route: "CMI router", spike: "Spike", vol_low: "Mahinang volume", adx_low: "ADX < " + (cfg.adx_max || 20), box: "Box", squeeze: "BB squeeze", atr_low: "ATR tahimik", stoch: "Stoch", cci: "CCI", wpr: "W%R", near_ema: "Malapit sa EMA", turn: "Bumabalik", volatile: "hindi VOLATILE", range: "siksik na range", trend: "trend", of_buyers: "Order flow", of_turn: "Order flow", of_balanced: "Order flow balanse" };
     const lab = (k) => SHORT[k] || (e.labels && e.labels[k]) || k;
     const miss = (e.missing || []).map(lab);
     const on = (e.on || []).length, have = (e.on || []).filter((k) => e.met && e.met[k]).length;
@@ -4728,4 +4755,21 @@
   };
   btn.addEventListener("click", () => { show = !show; apply(); });
   apply();
+})();
+
+
+// v2.8.27: ● TL BREAK button (trend line breakout + retest re-entry) - switches the AUTO TRADE setting tl_auto
+(function () {
+  const b = document.getElementById("tsTL");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    const on = !b.classList.contains("on");
+    const go = async () => {
+      try { await fetch("/api/auto/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tl_auto: on }) }); } catch (e) { /* offline */ }
+      b.classList.toggle("on", on);
+      b.innerHTML = `${on ? "●" : "○"} TL BREAK`;
+    };
+    if (!on && window.rgModal) window.rgModal.show("Gawing MANUAL ang TL BREAK?", "<p>Hindi na ito papasukan ng AUTO TRADE hanggang i-AUTO mo ulit.</p>", "Gawing MANUAL", go, false);
+    else go();
+  });
 })();

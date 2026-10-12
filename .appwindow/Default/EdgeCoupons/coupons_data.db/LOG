@@ -1,6 +1,15 @@
-2026/10/06-11:40:12.280 3c7c Reusing MANIFEST C:\reygun_terminal\.appwindow\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
-2026/10/06-11:40:34.043 3c7c Recovering log #45
-2026/10/06-11:40:34.043 3c7c Reusing old log C:\reygun_terminal\.appwindow\Default\EdgeCoupons/coupons_data.db/000045.log 
-2026/10/06-11:41:24.202 4010 Level-0 table #50: started
-2026/10/06-11:41:24.211 4010 Level-0 table #50: 683376 bytes OK
-2026/10/06-11:41:24.214 4010 Delete type=0 #45
+2026/10/12-00:56:20.348 1ff4 Reusing MANIFEST C:\reygun_terminal\.appwindow\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/10/12-00:56:34.935 1ff4 Recovering log #54
+2026/10/12-00:56:34.937 1ff4 Reusing old log C:\reygun_terminal\.appwindow\Default\EdgeCoupons/coupons_data.db/000054.log 
+2026/10/12-00:56:57.894 3cc0 Level-0 table #58: started
+2026/10/12-00:56:57.904 3cc0 Level-0 table #58: 683376 bytes OK
+2026/10/12-00:56:57.906 3cc0 Delete type=0 #54
+2026/10/12-00:56:57.907 3cc0 Compacting 4@0 + 1@1 files
+2026/10/12-00:56:57.931 3cc0 Generated table #59@0: 3 keys, 683376 bytes
+2026/10/12-00:56:57.931 3cc0 Compacted 4@0 + 1@1 files => 683376 bytes
+2026/10/12-00:56:57.934 3cc0 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/10/12-00:56:57.934 3cc0 Delete type=2 #47
+2026/10/12-00:56:57.935 3cc0 Delete type=2 #50
+2026/10/12-00:56:57.935 3cc0 Delete type=2 #53
+2026/10/12-00:56:57.935 3cc0 Delete type=2 #55
+2026/10/12-00:56:57.935 3cc0 Delete type=2 #58

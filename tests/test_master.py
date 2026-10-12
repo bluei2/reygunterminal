@@ -32,11 +32,11 @@ def _master_auto(**kw):
 # ---------------------------------------------------------------- strategies: MASTER profile, CVD, M5
 def test_master_profile_mirrors_the_ea():
     m = ST.master_settings(ST.clean_settings(None))
-    assert m["profile"] == "master" and m["htf_filter"] is False
-    assert m["trend"]["required"] == ["bos_m15", "bos_h4", "not_extreme", "m5_struct", "cvd"]
-    assert m["trend"]["sl_mode"] == "swing" and m["trend"]["rr"] == 2.0 and m["trend"]["h4_window"] == 12
-    assert m["pullback"]["os"] == 30.0 and m["pullback"]["ob"] == 70.0 and m["pullback"]["required"] == ["rsi", "ob_spike"]
-    assert m["conso"]["required"] == ["adx_low"] and m["conso"]["levels"] == 2 and m["conso"]["max_sl"] == 8.0
+    assert m["profile"] == "normal" and m["htf_filter"] is True       # v2.8.49: NORMAL = the Oct 7 setup
+    assert m["trend"]["required"] == ["bos_m15", "bos_h4", "of_buyers", "not_extreme", "mmi_cmi"]
+    assert m["trend"]["sl_mode"] == "swing" and m["trend"]["rr"] == 5.0 and m["trend"]["h4_window"] == 12
+    assert m["pullback"]["os"] == 40.0 and m["pullback"]["ob"] == 60.0 and m["pullback"]["required"] == ["rsi", "ob_spike", "of_turn", "mmi_cmi"]
+    assert m["conso"]["required"] == ["adx_low", "of_balanced", "mmi_cmi"] and m["conso"]["levels"] == 1 and m["conso"]["max_sl"] == 20.0   # v2.8.41: same as TREND / PULLBACK
     assert all(m[n]["auto"] for n in ST.NAMES)                  # CONSO on AUTO too
     assert ST.PROFILES["master"]["autotrade"]["max_open"] == 3
 
@@ -46,7 +46,7 @@ def test_migrate_to_master_only_from_normal():
     ST.save_settings(ST.clean_settings({"schema": 10, "profile": "normal", "conso": {"auto": False}}), p)
     assert ST.migrate_to_master(p)
     s = ST.load_settings(p)
-    assert s["profile"] == "master" and s["conso"]["auto"] and "cvd" in s["trend"]["required"]
+    assert s["profile"] == "normal" and s["conso"]["auto"] and "of_buyers" in s["trend"]["required"]
     ST.save_settings(ST.apply_profile(ST.clean_settings(None), "aggressive"), p)
     assert not ST.migrate_to_master(p) and ST.load_settings(p)["profile"] == "aggressive"
 
@@ -252,6 +252,7 @@ def test_secure_partial_for_trend_and_conso_left_alone():
     cycle(tm)
     assert tm.master.pos(grp.legs["master"])["volume"] == 0.02, tm.master.positions
     # a CONSO trade: no break-even / lock / partial from the position manager (Master EA: CSProtect off)
+    at.settings["conso_protect"] = False                         # CONSO protection OFF: left alone
     grp.source = "st_conso"
     sl0 = tm.master.pos(grp.legs["master"])["sl"]
     hub.set_price(mp["open"] + 7.0)                              # +1.75R: lock 1.5R -> 0.5R would move it
@@ -275,7 +276,7 @@ def test_v4_autotrade_migration_to_master():
     at = AutoTrader(tm)
     at.running = False
     s = at.settings
-    assert ST.load_settings()["profile"] == "master"
+    assert ST.load_settings()["profile"] == "normal"
     assert s["tf"] == "M15" and s["max_open"] == 3 and s["max_per_day"] == 0 and s["no_opposite"] is False
     assert s["master_mode"] and s["lot"] == 0.02                         # your lot is kept
     with open(p) as f:
@@ -289,7 +290,7 @@ def test_master_account_daily_limits_once():
     with open(trading.CONFIG_FILE, "w") as f:
         json.dump(dict(master=dict(name="M"), followers=[], risk_version=2), f)
     c = trading.load_config()
-    assert c["master"]["daily_dd"] == 20.0 and c["master"]["dd_mode"] == "$"
+    assert c["master"]["daily_dd"] == 400.0 and c["master"]["dd_mode"] == "pips"     # v2.8.26: 400 pips
     assert c["master"]["daily_tp"] == 60.0 and c["master"]["tp_mode"] == "$"
     with open(trading.CONFIG_FILE, "w") as f:                     # your own limits: kept
         json.dump(dict(master=dict(name="M", daily_dd=5.0, dd_mode="%"), followers=[], risk_version=2), f)
@@ -423,4 +424,57 @@ def test_v2822_trend_5pct_cap_also_applies_when_the_order_is_sent():
     ok2, why2 = tm.check_request(1, 0.01, sl_d, sl_d * 2, "auto")
     ok5, why5 = tm.check_request(1, 0.01, sl_d, sl_d * 2, "auto", risk_pct_cap=5.0)
     assert ok5, why5
+    _restore()
+
+
+def test_v2827_tl_break_counter_trend_entry_and_retest_reentry():
+    import types
+    hub, tm, g, at = _master_auto(score=90.0, bias=1, strategies=("trend",))   # HTF BULL
+    ST.save_settings(dict(ST.load_settings(), htf_filter=False))
+    tm.master.info["equity"] = 130.0
+    t = int(time.time()) // 900 * 900
+    brk = dict(side=-1, entry=4150.0, sl=4170.0, tp=4110.0, score=60.0, cautions=[], t=t, kind="TL break")
+    at._consider("tl_break", brk)                                   # SELL against the BULL bias, $20 SL on $130
+    assert at._last_res == "trade", [x["text"] for x in at.log][:3]
+    rt = dict(brk, t=t + 900, entry=4152.0, sl=4170.0, tp=4116.0)
+    at._consider("tl_retest", rt)                                   # re-entry on the retest: its own trade
+    assert at._last_res == "trade", [x["text"] for x in at.log][:3]
+    assert sorted(getattr(x, "source", "") for x in tm.groups.values()) == ["tl_break", "tl_retest"]
+    at._consider("tl_break", dict(brk, t=t + 1800))                 # a 2nd break while the 1st is open: one each
+    assert at._last_res != "trade"
+    # the plugin is asked with the TL BREAK params (break / retest, max SL $20, 1:2)
+    seen = []
+    class P:
+        params = dict(entry="break", max_sl=10.0)
+        def signals(self, bars, off):
+            seen.append(dict(self.params))
+            return []
+    fake = types.SimpleNamespace(obj=P(), error=None)
+    hub.ctx = lambda: None
+    at._signals("tl_retest", fake, [], "M15")
+    assert seen[-1]["entry"] == "retest" and seen[-1]["max_sl"] == 20.0 and seen[-1]["rr"] == 5.0
+    assert fake.obj.params == dict(entry="break", max_sl=10.0)   # the chart's own settings untouched
+    _restore()
+
+
+
+def test_v2837_normal_is_the_sc_setup_and_master_is_its_alias():
+    n = ST.apply_profile(ST.default_settings(), "normal")
+    m = ST.apply_profile(ST.default_settings(), "master")
+    assert n == m and n["profile"] == "normal"
+    assert n["trend"]["rr"] == 5.0 and n["pullback"]["required"] == ["rsi", "ob_spike", "of_turn", "mmi_cmi"] and n["htf_filter"] is True
+    assert ST.PROFILES["normal"]["protect"]["be_r"] == 0.5 and ST.PROFILES["normal"]["autotrade"]["conso_protect"]
+    assert ST.clean_settings({"schema": ST.SCHEMA, "profile": "master"})["profile"] == "normal"
+    assert set(ST.PROFILE_BUTTONS) == {"scalp", "normal", "aggressive"}
+
+
+def test_v2838_aggressive_lot_x2_not_stacked_with_align():
+    hub, tm, g, at = _master_auto(score=90.0, bias=1, strategies=("trend",))
+    ST.save_settings(dict(ST.load_settings(), htf_filter=False))
+    at.settings.update(lot=0.01, mode_mult=2.0, align_mult=2.0)
+    t = int(time.time()) // 300 * 300
+    at._consider("st_trend", _sg(1, t))                      # aligned AND aggressive: still x2, not x4
+    gid = next(iter(tm.groups))
+    cycle(tm, 1)
+    assert tm.master.pos(tm.groups[gid].legs["master"])["volume"] == 0.02
     _restore()

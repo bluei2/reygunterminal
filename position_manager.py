@@ -31,11 +31,13 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(HERE, "position_settings.json")
 DEFAULTS = dict(enabled=True, require_armed=True, interval_s=2.0,
-                be_r=1.0, be_usd=0.0, be_offset=0.20,
+                be_r=0.5, be_usd=0.0, be_offset=0.20,
                 profit_lock=[[1.25, 0.5]],         # [[at_r, lock_r], ...]
-                trail_mode="none", trail_start_r=1.0, trail_atr_mult=3.0, trail_tf="M5", step_r=1.0,
+                trail_mode="step", trail_start_r=0.5, trail_atr_mult=3.0, trail_tf="M5", step_r=0.5,
                 structure_buffer=0.30, swing_n=2,
                 partial_close=[],                  # [[at_r, fraction 0..1], ...]
+                manage_manual=True,                # v2.8.31: also your MANUAL / EA master trades (copied ones)
+                tp_scale=False,                    # v2.8.32: near TP (1:1) -> TP/2 as 1R (v2.8.33: off, BE is at 0.5R)
                 min_step=0.05)                     # $: ignore SL moves smaller than this
 TRAIL_MODES = ("none", "atr", "step", "structure")
 PRIORITY = ["EMERGENCY", "BROKER_SAFETY", "BREAK_EVEN", "PROFIT_LOCK", "TRAILING"]
@@ -154,7 +156,7 @@ def plan(side, entry, cur_sl, price, risk_dist, cfg, atr=None, swing=None, broke
     return out
 
 
-SETTINGS_VERSION = 2
+SETTINGS_VERSION = 4
 
 
 def load_settings():
@@ -163,11 +165,19 @@ def load_settings():
             raw = json.load(f)
     except (OSError, ValueError):
         return clean(None)
-    if int(raw.get("version", 1) or 1) < SETTINGS_VERSION and not raw.get("enabled") \
+    if int(raw.get("version", 1) or 1) < 2 and not raw.get("enabled") \
             and not float(raw.get("be_r") or 0) and not float(raw.get("be_usd") or 0) and not raw.get("profit_lock"):
         # the old file only held the old OFF defaults -> the new protective defaults (choices you made are kept)
         for k in ("enabled", "be_r", "be_offset", "profit_lock"):
             raw.pop(k, None)
+    if int(raw.get("version", 1) or 1) < 3 and raw.get("trail_mode", "none") == "none":
+        # v2.8.28 (Eugene: "kelangan magkaroon tayo ng trailing", 4170 -> 4180+ then back): TRAILING ON once -
+        # step 0.5R from +1R: at +1R SL +0.5R, +1.5R SL +1R, ... (tighten-only, TP unchanged)
+        raw["trail_mode"], raw["step_r"], raw["trail_start_r"] = "step", 0.5, 1.0
+    if int(raw.get("version", 1) or 1) < 4:
+        # v2.8.33 (Eugene: "0.5R = BE, 1R : 0.5R and so on"): break-even at +0.5R, then every +0.5R the stop
+        # follows one step behind (+1R -> +0.5R, +1.5R -> +1R, ...). Works for 1:1 trades too (TP/2 scaling off).
+        raw.update(be_r=0.5, trail_mode="step", step_r=0.5, trail_start_r=0.5, tp_scale=False)
     return clean(raw)
 
 
@@ -230,8 +240,8 @@ class PositionController:
         at = getattr(self.hub, "autotrader", None)
         ms = at.settings if at is not None and at.settings.get("master_mode", True) else {}
         for g in groups:
-            if getattr(g, "kind", "superchart") == "copy":
-                continue                           # your manual MT5 trade (copied): its SL is yours, not ours
+            if getattr(g, "kind", "superchart") == "copy" and not s.get("manage_manual", True):
+                continue                           # manual / EA trade: left to you (manage_manual OFF)
             src = getattr(g, "source", "")
             if src == "st_conso" and ms and not ms.get("conso_protect", False):
                 continue                           # MASTER: CONSO keeps its own SL / TP (Master EA: CSProtect off)
@@ -244,7 +254,16 @@ class PositionController:
             if not mp:
                 continue
             price = tk.bid if g.side == 1 else tk.ask
+            if not g.sl_dist and mp["sl"] and getattr(g, "kind", "superchart") == "copy":
+                # a manual / EA trade whose SL was added later: its FIRST stop is 1R (never the tightened one)
+                g.sl_dist = round(abs(mp["open"] - mp["sl"]), 2)
             risk_dist = g.sl_dist or (abs(mp["open"] - mp["sl"]) if mp["sl"] else 0)
+            tp_d = getattr(g, "tp_dist", 0) or (abs(mp["tp"] - mp["open"]) if mp["tp"] else 0)
+            if s.get("tp_scale", True) and risk_dist and tp_d and tp_d / 2.0 < risk_dist:
+                # v2.8.32 (Eugene: "1:1 lng kc ung trade"): the rules are written for 1:2 trades (1R = half the way to
+                # the TP). A 1:1 trade would only reach +1R AT its TP, so its 1R = half its TP distance: break-even,
+                # lock and trailing start halfway to the TP, like on a 1:2 trade. 1:2 and wider trades: unchanged.
+                risk_dist = tp_d / 2.0
             atr, swing = self._atr_swing(g.side) if s["trail_mode"] in ("atr", "structure") else (None, None)
             broker = getattr(tm.master, "broker", None) or {}
             done = set(getattr(g, "pm_done", []) or [])

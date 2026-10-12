@@ -7,7 +7,8 @@ import position_manager as PM
 
 
 def cfg(**kw):
-    return PM.clean(dict(dict(enabled=True, require_armed=True), **kw))
+    # these rule tests run without the v2.8.28 default trailing unless they ask for one
+    return PM.clean(dict(dict(enabled=True, require_armed=True, trail_mode="none"), **kw))
 
 
 def test_break_even_then_profit_lock_most_protective_wins():
@@ -118,13 +119,13 @@ def test_profit_protection_is_on_by_default_and_old_off_files_upgrade():
     import json
     import position_manager as PM
     d = PM.clean(None)
-    assert d["enabled"] and d["be_r"] == 1.0 and d["profit_lock"] == [[1.25, 0.5]] and d["trail_mode"] == "none"
+    assert d["enabled"] and d["be_r"] == 0.5 and d["profit_lock"] == [[1.25, 0.5]] and d["trail_mode"] == "step"
     with open(PM.SETTINGS_FILE, "w") as f:
         json.dump(dict(enabled=False, be_r=0.0, profit_lock=[], trail_mode="none"), f)
     s = PM.load_settings()
-    assert s["enabled"] and s["be_r"] == 1.0
+    assert s["enabled"] and s["be_r"] == 0.5
     with open(PM.SETTINGS_FILE, "w") as f:
-        json.dump(dict(enabled=True, be_r=2.0, profit_lock=[]), f)
+        json.dump(dict(enabled=True, be_r=2.0, profit_lock=[], version=4), f)
     s = PM.load_settings()
     assert s["be_r"] == 2.0 and s["profit_lock"] == []                 # your own choice stays
     with open(PM.SETTINGS_FILE, "w") as f:

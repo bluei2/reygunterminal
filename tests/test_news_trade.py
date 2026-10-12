@@ -142,7 +142,7 @@ def test_v287_follow_trend_can_be_off():
     nt._cycle()
     _fill_buy_on_master(tm, nt)
     assert not [g for g in tm.groups.values() if g.source == "news_trend"]
-    assert nt.settings["time_exit_min"] == 10
+    assert nt.settings["time_exit_min"] == 0                          # v2.8.36: no time exit (trailing)
 
 
 def test_v287_conso_grid_has_no_expiry():
@@ -225,3 +225,39 @@ def test_v2813_no_half_grid_when_the_price_already_left_the_box():
     r = nt.place_box(plan, 0.01, 0, label="CONSO M15 b")
     assert r["ok"], r
     assert len(news_orders(tm.master)) == 4
+
+
+def test_v2835_news_rr5_and_trailed():
+    import json
+    import os
+    import news_trader as NTM
+    import position_manager as PM
+    assert NTM.DEFAULTS["tp_rr"] == 5.0
+    old = NTM.SETTINGS_FILE
+    NTM.SETTINGS_FILE = "_nt_test.json"
+    try:
+        with open(NTM.SETTINGS_FILE, "w") as f:
+            json.dump(dict(tp_rr=2.0, follow_trend=True), f)
+        assert NTM.load_settings()["tp_rr"] == 5.0                      # once
+        assert NTM.load_settings()["time_exit_min"] == 0                # v2.8.36: no 10-min exit
+        with open(NTM.SETTINGS_FILE, "w") as f:
+            json.dump(dict(tp_rr=3.0, time_exit_min=15, settings_version=3), f)
+        st = NTM.load_settings()
+        assert st["tp_rr"] == 3.0 and st["time_exit_min"] == 15          # your later choices stay
+    finally:
+        if os.path.exists(NTM.SETTINGS_FILE):
+            os.remove(NTM.SETTINGS_FILE)
+        NTM.SETTINGS_FILE = old
+    hub, tm, nt = setup(follow_trend="false", time_exit_min=0, close_before_news="false")
+    tm.set_armed(True)
+    nt.set_enabled(True)
+    nt._cycle()
+    _fill_buy_on_master(tm, nt)
+    g = next(x for x in tm.groups.values() if x.source == "news")
+    pc = PM.PositionController(tm)
+    pc.running = False
+    pc.settings = PM.clean(None)                                        # the default 0.5R ladder
+    hub.set_price(g.m_open + 1.1 * g.sl_dist)                           # +1R and a bit
+    cycle(tm); pc.step(); cycle(tm)
+    mp = tm.master.pos(g.legs["master"])
+    assert mp["sl"] > mp["open"], mp                                    # the news trade is trailed too

@@ -38,6 +38,20 @@ position_manager.SETTINGS_FILE = os.path.join(TMP, "position_settings.json")
 decision_engine.SETTINGS_FILE = os.path.join(TMP, "decision_settings.json")
 smc_engine.SETTINGS_FILE = os.path.join(TMP, "smc_settings.json")
 market_hours.SESSIONS_FILE = os.path.join(TMP, "session_settings.json")
+
+# v2.8.44: EVERY runtime file of EVERY module goes to the temp folder. Before this, strategies.py (and a few others)
+# still wrote into the program folder, and that test file ended up inside the release zip (it overwrote the user's
+# strategy settings on every update since v2.8.30).
+import importlib  # noqa: E402
+for _name in ("strategies", "autotrade", "news_trader", "news", "news_results", "forecast", "execution_guard",
+              "exitguard", "intermarket", "regime", "runstate", "notify", "plugin_loader", "drift", "ai_analyst"):
+    try:
+        _m = importlib.import_module(_name)
+    except Exception:
+        continue
+    for _attr, _val in list(vars(_m).items()):
+        if _attr.endswith("_FILE") and isinstance(_val, str) and os.path.dirname(os.path.abspath(_val)) == ROOT:
+            setattr(_m, _attr, os.path.join(TMP, os.path.basename(_val)))
 import plugin_loader  # noqa: E402
 
 plugin_loader.SETTINGS_FILE = os.path.join(TMP, "plugin_settings.json")

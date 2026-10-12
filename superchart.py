@@ -41,8 +41,8 @@ from sources import DemoSource, MT5Source, Recorder, ReplaySource
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
-VERSION = "2.8.26"        # REYGUN SuperChart version (see CHANGELOG.md)
-BUILD = "2026-10-05.26"          # must match BUILD in web/app.js; the UI warns when the running server is older
+VERSION = "2.8.49"        # REYGUN SuperChart version (see CHANGELOG.md)
+BUILD = "2026-10-09.49"          # must match BUILD in web/app.js; the UI warns when the running server is older
 STRUCT_TFS = ["H4", "H1", "M15", "M5"]
 HIST_WINDOW = 600          # bars per TF the history / backtest analyser sees (live MT5 loads ~500)
 CHART_TFS = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
@@ -1259,6 +1259,8 @@ def make_handler(hub: Hub):
                 # NORMAL / AGGRESSIVE / SCALP preset: the strategy settings + the AUTO TF. Never switches anything ON.
                 import strategies as stm
                 name = str(body.get("name", ""))
+                if name == "master":
+                    name = "normal"                    # v2.8.37: MASTER is NORMAL now
                 if name not in stm.PROFILES:
                     return self._json(dict(ok=False, error=f"unknown profile {name!r}"))
                 saved = stm.save_settings(stm.apply_profile(stm.load_settings(), name))

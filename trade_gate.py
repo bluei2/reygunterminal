@@ -230,8 +230,9 @@ class MasterGate:
             for k in d.get("missing_required") or []:
                 if k == "trigger" and sig["source"] != "analyser":
                     continue                     # a breakout / trend-line signal is itself the structure trigger
-                own = sig["source"] == "reversal" or str(sig["source"]).startswith("st_")
-                if str(sig["source"]).startswith("st_") and k != "htf":
+                stratlike = str(sig["source"]).startswith("st_") or sig["source"] in ("tl_break", "tl_retest")
+                own = sig["source"] == "reversal" or stratlike
+                if stratlike and k != "htf":
                     # STRATEGIES (Eugene: "pag lahat ng na-set sa strategy nag-green, trade na agad"): the strategy's
                     # own conditions are the setup. The analyser's required list (and regime extras such as
                     # BREAKOUT -> displacement) does not apply; the HTF bias still does on NORMAL (HTF filter ON).
@@ -260,7 +261,9 @@ class MasterGate:
         if risk is not None:
             try:
                 cap = None
-                if sig["source"] in ("st_conso", "st_trend", "st_pullback"):   # own risk % per strategy (0 = off)
+                if sig["source"] in ("tl_break", "tl_retest"):
+                    cap = 0.0                                  # v2.8.27 TL BREAK: SL capped at $20, no % block
+                elif sig["source"] in ("st_conso", "st_trend", "st_pullback"):   # own risk % per strategy (0 = off)
                     import strategies as _st
                     nm = sig["source"][3:]
                     cap = float(_st.load_settings().get(nm, {}).get("max_risk_pct", 0.0))
@@ -280,7 +283,8 @@ class MasterGate:
                 fail("EXECUTION", "BLOCKED_EXECUTION", f"execution guard failed: {e.__class__.__name__}: {e}", "execution")
                 hub.note("error", f"gate: execution guard failed: {e}", category="EXECUTION_ERROR")
         cb = q.get("conflict_block")
-        if cb and cb.get("code") == "STRUCTURE_CONFLICT" and "htf:own" in waive and str(sig["source"]).startswith("st_"):
+        if cb and cb.get("code") == "STRUCTURE_CONFLICT" and "htf:own" in waive and \
+                (str(sig["source"]).startswith("st_") or sig["source"] in ("tl_break", "tl_retest")):
             cb = None       # STRATEGIES with the analyser HTF filter OFF: the strategy's own trend (its BOS) decides
         if cb:
             blockers.append(dict(code=q["conflict_block"]["code"], text=q["conflict_block"]["text"], level="hard"))
